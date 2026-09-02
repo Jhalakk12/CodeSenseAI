@@ -223,10 +223,30 @@ with col4:
 
 st.markdown("---")
 
+import re
+
+def render_model_output(text: str):
+    """
+    Renders model output, neatly tucking <think>...</think> reasoning blocks into an expander.
+    """
+    think_match = re.search(r"<think>(.*?)</think>", text, flags=re.DOTALL)
+    if think_match:
+        thought_process = think_match.group(1).strip()
+        final_answer = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+        with st.expander("💭 View Model Reasoning & Retrieval Logic", expanded=False):
+            st.markdown(thought_process)
+        st.markdown(final_answer)
+    else:
+        st.markdown(text)
+
 # Render Chat History
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
-        st.markdown(msg["content"])
+        if msg["role"] == "assistant":
+            render_model_output(msg["content"])
+        else:
+            st.markdown(msg["content"])
+
         if "citations" in msg and msg["citations"]:
             with st.expander(f"🔍 Source Citations ({len(msg['citations'])} code chunks retrieved)"):
                 for cite in msg["citations"]:
@@ -273,7 +293,7 @@ if user_query:
                         task_mode=selected_task
                     )
                     
-                    st.markdown(res["answer"])
+                    render_model_output(res["answer"])
                     
                     if res["citations"]:
                         with st.expander(f"🔍 Source Citations ({len(res['citations'])} code chunks retrieved)"):
