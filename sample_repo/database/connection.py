@@ -1,6 +1,7 @@
 import time
 from typing import Dict, Any, List, Optional
 
+
 class DatabasePool:
     """
     Manages database connection pooling and query execution.
@@ -53,5 +54,6 @@ class DatabasePool:
             return [{"status": "success", "query": query, "rows_affected": 1}]
         finally:
             self.release_connection(conn)
+
 
 db_pool = DatabasePool(max_connections=5)

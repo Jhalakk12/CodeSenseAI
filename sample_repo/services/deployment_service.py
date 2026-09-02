@@ -4,6 +4,7 @@ from typing import Dict, Any, List
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("DeploymentService")
 
+
 class DeploymentManager:
     """
     Automates CI/CD deployment orchestrations, health checks, and rollbacks.
@@ -26,7 +27,7 @@ class DeploymentManager:
         """
         logger.info(f"Initiating deployment for {service_name} commit {commit_sha}")
         health_passed = self.run_health_check(f"https://{service_name}.internal/health")
-        
+
         if not health_passed:
             self.execute_rollback(commit_sha)
             return {"status": "failed", "action": "rollback", "commit": commit_sha}
