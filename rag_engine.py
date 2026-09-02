@@ -151,7 +151,7 @@ class CodeSenseEngine:
         Executes similarity search on ChromaDB, compiles context, and runs LLM inference.
         """
         # Similarity search
-        results = self.vector_store.similarity_search_with_relevance_scores(query, k=top_k)
+        results = self.vector_store.similarity_search_with_score(query, k=top_k)
         
         context_blocks = []
         citations = []
