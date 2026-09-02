@@ -198,10 +198,10 @@ class CodeSenseEngine:
             if not api_key:
                 raise ValueError("Groq API Key is required. Please provide it in the sidebar.")
             llm = ChatGroq(
-                groq_api_key=api_key,
+                groq_api_key=api_key.strip(),
                 model_name=model_name,
                 temperature=0.2,
-                max_tokens=2048
+                max_tokens=1024
             )
         else:
             # Fallback for Ollama

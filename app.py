@@ -99,22 +99,43 @@ with st.sidebar:
     )
 
     if provider == "Groq":
-        # Verified conversational & code LLMs on Groq
-        groq_models = [
-            "llama-3.1-8b-instant",
-            "llama3-70b-8192",
-            "llama3-8b-8192",
-            "gemma2-9b-it",
-            "mixtral-8x7b-32768"
-        ]
+        groq_models = []
+        if api_key:
+            try:
+                from groq import Groq
+                client = Groq(api_key=api_key.strip())
+                fetched = client.models.list().data
+                # Only include generative LLMs, exclude whisper audio and guard classifiers
+                groq_models = [
+                    m.id for m in fetched
+                    if not any(k in m.id.lower() for k in ["whisper", "guard", "audio", "embed"])
+                ]
+            except Exception as err:
+                st.caption(f"⚠️ Could not load account models: {err}")
 
+        # Fallback if API key not yet entered or fetch returned empty
+        if not groq_models:
+            groq_models = [
+                "llama3-8b-8192",
+                "llama3-70b-8192",
+                "mixtral-8x7b-32768",
+                "gemma2-9b-it"
+            ]
+
+        # Prioritize 8b or 70b general models if present
         default_idx = 0
+        for i, m in enumerate(groq_models):
+            if "8b" in m.lower() or "70b" in m.lower():
+                default_idx = i
+                break
+
         model_name = st.selectbox(
             "Model",
             groq_models,
             index=default_idx,
-            help="Select the LLM to use. llama-3.1-8b-instant is recommended for fast, high-quality code analysis."
+            help="Live model list detected from your Groq account."
         )
+        st.caption(f"Selected: `{model_name}`")
     else:
         model_name = st.text_input("Ollama Model Name", value="deepseek-coder:6.7b")
 
