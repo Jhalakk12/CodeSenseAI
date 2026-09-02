@@ -99,14 +99,38 @@ with st.sidebar:
     )
 
     if provider == "Groq":
+        # Universally available Groq models across all accounts
+        groq_models = [
+            "llama-3.1-8b-instant",
+            "llama3-70b-8192",
+            "llama3-8b-8192",
+            "gemma2-9b-it",
+            "mixtral-8x7b-32768"
+        ]
+        
+        # If API key is provided, attempt to dynamically fetch available models
+        if api_key:
+            try:
+                from groq import Groq
+                client = Groq(api_key=api_key)
+                fetched_models = [
+                    m.id for m in client.models.list().data 
+                    if not any(x in m.id.lower() for x in ["whisper", "embed", "vision"])
+                ]
+                if fetched_models:
+                    groq_models = fetched_models
+            except Exception:
+                pass
+
+        default_idx = 0
+        if "llama-3.1-8b-instant" in groq_models:
+            default_idx = groq_models.index("llama-3.1-8b-instant")
+
         model_name = st.selectbox(
             "Model",
-            [
-                "llama-3.3-70b-versatile",
-                "llama-3.1-8b-instant",
-                "deepseek-r1-distill-llama-70b"
-            ],
-            index=0
+            groq_models,
+            index=default_idx,
+            help="Select the LLM to use. llama-3.1-8b-instant is recommended for fastest inference."
         )
     else:
         model_name = st.text_input("Ollama Model Name", value="deepseek-coder:6.7b")

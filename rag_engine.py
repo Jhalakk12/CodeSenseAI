@@ -142,7 +142,7 @@ class CodeSenseEngine:
         self,
         query: str,
         api_key: str,
-        model_name: str = "llama-3.3-70b-versatile",
+        model_name: str = "llama-3.1-8b-instant",
         provider: str = "Groq",
         top_k: int = 4,
         task_mode: str = "general"
