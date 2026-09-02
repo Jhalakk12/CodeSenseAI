@@ -105,10 +105,12 @@ with st.sidebar:
                 from groq import Groq
                 client = Groq(api_key=api_key.strip())
                 fetched = client.models.list().data
-                # Only include generative LLMs, exclude whisper audio and guard classifiers
+                # Strictly whitelist proven generative coding & chat model families
+                allowed_families = ["qwen", "llama", "mixtral", "gemma", "deepseek"]
                 groq_models = [
                     m.id for m in fetched
-                    if not any(k in m.id.lower() for k in ["whisper", "guard", "audio", "embed"])
+                    if any(fam in m.id.lower() for fam in allowed_families)
+                    and not any(bad in m.id.lower() for bad in ["guard", "whisper", "vision", "embed"])
                 ]
             except Exception as err:
                 st.caption(f"⚠️ Could not load account models: {err}")
@@ -116,24 +118,27 @@ with st.sidebar:
         # Fallback if API key not yet entered or fetch returned empty
         if not groq_models:
             groq_models = [
-                "llama3-8b-8192",
+                "qwen/qwen3.8-27b",
                 "llama3-70b-8192",
+                "llama3-8b-8192",
                 "mixtral-8x7b-32768",
                 "gemma2-9b-it"
             ]
 
-        # Prioritize 8b or 70b general models if present
+        # Pick qwen or 70b as preferred default
         default_idx = 0
         for i, m in enumerate(groq_models):
-            if "8b" in m.lower() or "70b" in m.lower():
+            if "qwen" in m.lower():
                 default_idx = i
                 break
+            elif "70b" in m.lower():
+                default_idx = i
 
         model_name = st.selectbox(
             "Model",
             groq_models,
             index=default_idx,
-            help="Live model list detected from your Groq account."
+            help="Verified generative LLMs available on your Groq account."
         )
         st.caption(f"Selected: `{model_name}`")
     else:
