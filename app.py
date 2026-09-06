@@ -249,11 +249,13 @@ with st.sidebar:
     # DevOps Architecture Verification
     st.subheader("🛠️ DevOps Pipeline Status")
     st.markdown("""
-    <div style="font-size: 0.85rem; color: #8b949e;">
+    <div style="font-size: 0.85rem; color: #8b949e; line-height: 1.6;">
         <div>🐳 <b>Dockerfile:</b> <span style="color: #3fb950;">Configured</span></div>
         <div>📦 <b>Docker Compose:</b> <span style="color: #3fb950;">Ready</span></div>
         <div>⚙️ <b>CI/CD (GitHub Actions):</b> <span style="color: #3fb950;">Active</span></div>
         <div>📊 <b>Vector Store:</b> <span style="color: #58a6ff;">ChromaDB Persistent</span></div>
+        <div>🌐 <b>Architecture:</b> <span style="color: #58a6ff;">7-Service Topology</span></div>
+        <div>🛡️ <b>Guardrails:</b> <span style="color: #3fb950;">Scope & Grounding Active</span></div>
     </div>
     """, unsafe_allow_html=True)
 
