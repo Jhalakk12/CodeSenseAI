@@ -1,5 +1,6 @@
 import os
 import subprocess
+import zipfile
 import streamlit as st
 from dotenv import load_dotenv
 from rag_engine import CodeSenseEngine
@@ -154,14 +155,16 @@ with st.sidebar:
         [
             "Built-in Sample Microservice (sample_repo)",
             "Clone from GitHub URL",
+            "Upload Codebase (.ZIP Archive)",
             "Custom Local Directory"
         ],
         index=0
     )
 
     github_url = ""
+    uploaded_zip = None
     if repo_option == "Custom Local Directory":
-        target_path = st.text_input("Directory Absolute Path", value=os.getcwd())
+        target_path = st.text_input("Directory Absolute Path", value=os.getcwd(), help="Absolute path to any folder on your computer.")
     elif repo_option == "Clone from GitHub URL":
         github_url = st.text_input(
             "GitHub Repository URL",
@@ -171,6 +174,17 @@ with st.sidebar:
         )
         repo_name = github_url.rstrip("/").split("/")[-1].replace(".git", "") if github_url else "repo"
         target_path = os.path.join(os.getcwd(), "cloned_repos", repo_name)
+    elif repo_option == "Upload Codebase (.ZIP Archive)":
+        uploaded_zip = st.file_uploader(
+            "Upload Codebase ZIP Archive",
+            type=["zip"],
+            help="Drag and drop any zipped source code folder."
+        )
+        if uploaded_zip is not None:
+            zip_stem = os.path.splitext(uploaded_zip.name)[0]
+            target_path = os.path.join(os.getcwd(), "uploaded_repos", zip_stem)
+        else:
+            target_path = ""
     else:
         target_path = os.path.join(os.getcwd(), "sample_repo")
 
@@ -196,6 +210,19 @@ with st.sidebar:
                     else:
                         st.info(f"Using cached clone at `{target_path}`. Pulling latest changes...")
                         subprocess.run(["git", "-C", target_path, "pull"], capture_output=True, text=True, timeout=60)
+
+                elif repo_option == "Upload Codebase (.ZIP Archive)":
+                    if not uploaded_zip:
+                        st.error("Please select a .ZIP file to upload before indexing.")
+                        st.stop()
+                    os.makedirs(target_path, exist_ok=True)
+                    with zipfile.ZipFile(uploaded_zip) as z:
+                        z.extractall(target_path)
+                    st.info(f"Extracted archive `{uploaded_zip.name}` successfully.")
+
+                if not target_path or not os.path.exists(target_path):
+                    st.error(f"Target path `{target_path}` does not exist.")
+                    st.stop()
 
                 stats = engine.index_codebase(target_path)
                 st.session_state.indexed = True
