@@ -145,7 +145,8 @@ class CodeSenseEngine:
         model_name: str = "llama-3.1-8b-instant",
         provider: str = "Groq",
         top_k: int = 4,
-        task_mode: str = "general"
+        task_mode: str = "general",
+        max_tokens: int = 800
     ) -> Dict[str, Any]:
         """
         Executes similarity search on ChromaDB, compiles context, and runs LLM inference.
@@ -197,11 +198,13 @@ class CodeSenseEngine:
         if provider == "Groq":
             if not api_key:
                 raise ValueError("Groq API Key is required. Please provide it in the sidebar.")
+            # Ensure max_tokens stays strictly under Groq on-demand OTPM tier limits (Limit: 1000 for Qwen)
+            effective_tokens = min(max_tokens, 800)
             llm = ChatGroq(
                 groq_api_key=api_key.strip(),
                 model_name=model_name,
                 temperature=0.2,
-                max_tokens=1024
+                max_tokens=effective_tokens
             )
         else:
             # Fallback for Ollama
@@ -213,11 +216,30 @@ class CodeSenseEngine:
 
         chain = prompt_template | llm | StrOutputParser()
 
-        response_text = chain.invoke({
-            "system_message": system_message,
-            "context": context_str,
-            "question": query
-        })
+        try:
+            response_text = chain.invoke({
+                "system_message": system_message,
+                "context": context_str,
+                "question": query
+            })
+        except Exception as e:
+            err_msg = str(e).lower()
+            # If rate limited on output tokens per minute (OTPM), retry with reduced token footprint
+            if ("rate_limit" in err_msg or "429" in err_msg or "otpm" in err_msg or "tokens" in err_msg) and provider == "Groq":
+                retry_llm = ChatGroq(
+                    groq_api_key=api_key.strip(),
+                    model_name=model_name,
+                    temperature=0.2,
+                    max_tokens=500
+                )
+                retry_chain = prompt_template | retry_llm | StrOutputParser()
+                response_text = retry_chain.invoke({
+                    "system_message": system_message,
+                    "context": context_str,
+                    "question": query
+                })
+            else:
+                raise e
 
         return {
             "answer": response_text,
