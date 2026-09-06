@@ -1,0 +1,3 @@
+[logger]
+# Suppress non-fatal internal warnings (such as Streamlit's source watcher checking unused Hugging Face vision modules)
+level = "error"
