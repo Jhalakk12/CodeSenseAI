@@ -52,11 +52,21 @@ Modern software engineering organizations face compounding technical debt and hi
               GitHub Actions • Flake8 • Pytest
 ```
 
-### Architectural Subsystems
-1. **Developer Experience & UI Layer:** Interactive Streamlit dashboard with real-time model switching, query presets, and collapsible reasoning trees.
-2. **Indexing & Embedding Pipeline:** Source files are split at logical function and class boundaries via LangChain's code-aware splitters and converted into 384-dimensional dense vectors using `sentence-transformers/all-MiniLM-L6-v2`.
-3. **Inference & Orchestration Layer:** Top-ranked context chunks are augmented with custom system prompts and processed via Groq LPUs for sub-second responses.
-4. **DevOps Automation Pipeline:** GitHub Actions runs automated linting, test suites, and dynamic AI PR diff audits via `scripts/ai_pr_reviewer.py`.
+### Logically Separated Services & System Topology (CSE 4011 Framework)
+In accordance with the course's architectural guidelines, CodeSense AI operates as a set of decoupled, coordinated services:
+
+1. **Application Service (`app.py`):** Handles developer interactions, responsive dark-themed console rendering, prompt suggestions, and collapsible reasoning trees (`<think>`).
+2. **Data & Knowledge Service:** Manages multi-mode source code ingestion across built-in microservices (`sample_repo`), dynamic GitHub URL shallow clones, uploaded `.zip` archives, and local directories.
+3. **Embedding Service (`rag_engine.py`):** Converts AST-chunked source code into 384-dimensional dense vectors using open-source, local CPU-based `sentence-transformers/all-MiniLM-L6-v2`.
+4. **RAG & Retrieval Service (`rag_engine.py`):** Indexes vectors into an in-process persistent ChromaDB store; performs cosine similarity searches to retrieve the top-k semantically relevant code chunks with mathematical relevance scores.
+5. **LLM Inference Service:** Manages high-speed communication with cloud-based Groq LPUs (`qwen/qwen3.8-27b`, `llama3-70b`) for sub-second generation, with full compatibility for local Ollama models.
+6. **Git & DevOps Service (`scripts/ai_pr_reviewer.py` & `.github/workflows/ai-check.yml`):** Functions as a dedicated boundary for Git operations; inspects PR `git diff`, executes Flake8 linting, runs automated Pytest test suites, and generates PR security audits.
+7. **Orchestration Layer (`rag_engine.py`):** Coordinates LangChain prompt templates, context formatting, and streaming output parsers to ensure requests move seamlessly across the pipeline.
+
+### 🛡️ Guardrails & Scope Control Architecture
+- **Input Guardrail & Scope Control:** Accurately detects out-of-domain requests (e.g. unintegrated payment systems like Stripe or external queries like weather) and enforces zero-hallucination refusals grounded strictly in repository context.
+- **Output Guardrail & Grounding:** Ensures every claim made by the LLM is substantiated by active code chunks, surfaced directly through collapsible **Source Citations** with file paths and similarity scores.
+- **Rate Limit & Token Guardrail:** Enforces dynamic token ceilings (600–800 tokens) with automatic fallback and retry logic to prevent API throttling.
 
 ---
 
