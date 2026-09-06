@@ -73,12 +73,13 @@ if "indexed" not in st.session_state:
 if "index_stats" not in st.session_state:
     st.session_state.index_stats = None
 
-# Initialize Engine
-@st.cache_resource
-def get_engine():
-    return CodeSenseEngine()
+# Initialize Engine with dynamic reload to prevent stale module caching
+import importlib
+import rag_engine
+importlib.reload(rag_engine)
+from rag_engine import CodeSenseEngine
 
-engine = get_engine()
+engine = CodeSenseEngine()
 
 # --- SIDEBAR: Configuration & DevOps Controls ---
 with st.sidebar:
@@ -127,13 +128,15 @@ with st.sidebar:
                 "gemma2-9b-it"
             ]
 
-        # Pick qwen or 70b as preferred default
+        # Pick high-capacity Llama models or Qwen as default
         default_idx = 0
         for i, m in enumerate(groq_models):
-            if "qwen" in m.lower():
+            if "llama" in m.lower() and "70b" in m.lower():
                 default_idx = i
                 break
-            elif "70b" in m.lower():
+            elif "llama" in m.lower() and "8b" in m.lower():
+                default_idx = i
+            elif "qwen" in m.lower() and default_idx == 0:
                 default_idx = i
 
         model_name = st.selectbox(
@@ -357,7 +360,8 @@ if user_query:
                         api_key=api_key,
                         model_name=model_name,
                         provider=provider,
-                        task_mode=selected_task
+                        task_mode=selected_task,
+                        max_tokens=600
                     )
                     
                     render_model_output(res["answer"])

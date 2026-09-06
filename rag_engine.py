@@ -198,13 +198,13 @@ class CodeSenseEngine:
         if provider == "Groq":
             if not api_key:
                 raise ValueError("Groq API Key is required. Please provide it in the sidebar.")
-            # Ensure max_tokens stays strictly under Groq on-demand OTPM tier limits (Limit: 1000 for Qwen)
-            effective_tokens = min(max_tokens, 800)
+            # Qwen on Groq free tier enforces a strict 1000 OTPM ceiling. Cap Qwen at 600 tokens.
+            limit_ceiling = 600 if "qwen" in model_name.lower() else min(max_tokens, 1024)
             llm = ChatGroq(
                 groq_api_key=api_key.strip(),
                 model_name=model_name,
                 temperature=0.2,
-                max_tokens=effective_tokens
+                max_tokens=limit_ceiling
             )
         else:
             # Fallback for Ollama
