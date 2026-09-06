@@ -19,3 +19,5 @@ huggingface-hub>=0.23.0
 # DevOps & Code Utilities
 pygithub>=2.3.0
 pytest>=8.0.0
+selenium>=4.20.0
+webdriver-manager>=4.0.1

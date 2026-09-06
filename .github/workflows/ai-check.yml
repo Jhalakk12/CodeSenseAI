@@ -43,5 +43,12 @@ jobs:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: |
           echo "Triggering CodeSense AI Automated PR Analysis Pipeline..."
-          # Python script hook for PR diff evaluation
+          python scripts/ai_pr_reviewer.py
           echo "Automated AI checks completed successfully."
+
+      - name: Upload AI Review Audit Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: codesense-ai-pr-review
+          path: pr_review_report.md

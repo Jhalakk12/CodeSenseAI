@@ -1,4 +1,5 @@
 import os
+import subprocess
 import streamlit as st
 from dotenv import load_dotenv
 from rag_engine import CodeSenseEngine
@@ -150,18 +151,52 @@ with st.sidebar:
     st.subheader("📁 Repository Indexing")
     repo_option = st.radio(
         "Source Codebase",
-        ["Built-in Sample Microservice (sample_repo)", "Custom Local Directory"],
+        [
+            "Built-in Sample Microservice (sample_repo)",
+            "Clone from GitHub URL",
+            "Custom Local Directory"
+        ],
         index=0
     )
 
+    github_url = ""
     if repo_option == "Custom Local Directory":
         target_path = st.text_input("Directory Absolute Path", value=os.getcwd())
+    elif repo_option == "Clone from GitHub URL":
+        github_url = st.text_input(
+            "GitHub Repository URL",
+            value="https://github.com/pallets/flask",
+            placeholder="https://github.com/username/repository",
+            help="Provide any public GitHub repository to clone and index its AST code vectors."
+        )
+        repo_name = github_url.rstrip("/").split("/")[-1].replace(".git", "") if github_url else "repo"
+        target_path = os.path.join(os.getcwd(), "cloned_repos", repo_name)
     else:
         target_path = os.path.join(os.getcwd(), "sample_repo")
 
     if st.button("🚀 Index / Re-Index Codebase", use_container_width=True, type="primary"):
-        with st.spinner("Analyzing AST, splitting chunks, and generating ChromaDB vectors..."):
+        with st.spinner("Analyzing codebase and generating ChromaDB vectors..."):
             try:
+                if repo_option == "Clone from GitHub URL":
+                    if not github_url or not github_url.startswith(("http://", "https://", "git@")):
+                        st.error("Please enter a valid GitHub repository URL.")
+                        st.stop()
+                    os.makedirs(os.path.join(os.getcwd(), "cloned_repos"), exist_ok=True)
+                    if not os.path.exists(target_path):
+                        st.info(f"Cloning `{github_url}` (shallow clone)...")
+                        res = subprocess.run(
+                            ["git", "clone", "--depth", "1", github_url.strip(), target_path],
+                            capture_output=True,
+                            text=True,
+                            timeout=120
+                        )
+                        if res.returncode != 0:
+                            st.error(f"Git clone failed: {res.stderr}")
+                            st.stop()
+                    else:
+                        st.info(f"Using cached clone at `{target_path}`. Pulling latest changes...")
+                        subprocess.run(["git", "-C", target_path, "pull"], capture_output=True, text=True, timeout=60)
+
                 stats = engine.index_codebase(target_path)
                 st.session_state.indexed = True
                 st.session_state.index_stats = stats
