@@ -16,11 +16,33 @@
 
 ## 🧪 2. In-Depth Live Testing & Demonstration Sequence
 
-### Step 1: Launch the Interactive Web Console
+### Step 1: Launch the System (Choose Mode: Web UI or Pure CLI)
+
+#### Option A: Interactive Web Console (Streamlit)
 ```powershell
 .\.venv\Scripts\streamlit run app.py
 ```
 Open `http://localhost:8501` in your browser.
+
+#### Option B: Pure Command Line Interface (CLI Machine / Linux)
+If the faculty requests demonstration strictly on a **CLI / terminal machine without a browser**:
+```bash
+# 1. Direct interactive CLI shell
+python cli.py
+
+# 2. Or run individual subcommands:
+python cli.py index ./sample_repo
+python cli.py query "Explain the JWT authentication architecture"
+python cli.py security "Check for SQL vulnerabilities or unhandled exceptions"
+python cli.py test "Generate pytest unit tests for database connection pool"
+python cli.py review
+
+# 3. For pure Linux CLI (WSL Ubuntu):
+wsl
+cd /mnt/c/Users/jhala/OneDrive/Projects/CodeSenseAI
+python3 cli.py
+```
+*(Runs 100% in the terminal with full ASCII banner, vector search, Groq LPU streaming, and source citations!)*
 
 ---
 
