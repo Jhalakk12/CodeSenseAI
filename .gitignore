@@ -6,3 +6,5 @@ chroma_db/
 .pytest_cache/
 cloned_repos/
 uploaded_repos/
+
+sourcegraph/

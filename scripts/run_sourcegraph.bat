@@ -13,7 +13,7 @@ docker run -d ^
   --name sourcegraph-codesense ^
   --volume %cd%\sourcegraph\config:/etc/sourcegraph ^
   --volume %cd%\sourcegraph\data:/var/opt/sourcegraph ^
-  sourcegraph/server:latest
+  sourcegraph/server:5.3.9014
 
 echo Sourcegraph container initiated.
 echo Access web interface at http://localhost:7080

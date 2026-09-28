@@ -146,7 +146,7 @@ class CodeSenseEngine:
         provider: str = "Groq",
         top_k: int = 4,
         task_mode: str = "general",
-        max_tokens: int = 800
+        max_tokens: int = 1200
     ) -> Dict[str, Any]:
         """
         Executes similarity search on ChromaDB, compiles context, and runs LLM inference.

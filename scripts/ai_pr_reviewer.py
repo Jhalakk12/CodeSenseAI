@@ -108,7 +108,7 @@ def run_ai_review():
                 {"role": "user", "content": prompt}
             ],
             temperature=0.2,
-            max_tokens=600
+            max_tokens=1500
         )
 
         report = response.choices[0].message.content
