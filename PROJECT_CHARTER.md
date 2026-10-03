@@ -108,8 +108,8 @@ gantt
 
 ## 6. Team Responsibility Matrix
 
-| Team Member | Project Role | Contribution % | Module Responsibilities & Key Deliverables |
-| :--- | :--- | :---: | :--- |
-| **Jhalak Kapila** *(Lead)* | Lead AI & DevOps Architect | **50%** | Core LangChain RAG pipeline, AST code chunking, ChromaDB vector store, Groq LPU acceleration, GitHub Actions CI/CD Quality Gate, Sweep.dev PR Reviewer (`rag_engine.py`, `scripts/ai_pr_reviewer.py`, `.github/workflows/ai-check.yml`, `cli.py`, `Dockerfile`) |
-| **Khushi Hooda** | Testing, Automation & QA Lead | **32%** | CodiumAI Behavior-driven test generation, Backend Pytest microservice unit suites, Selenium WebDriver headless Chrome E2E browser automation, Flake8 linting gate (`tests/test_sample_repo.py`, `tests/test_ui_selenium.py`) |
-| **Aastha Thakur** | UI/UX & Tool Setup Assistant | **18%** | Streamlit DevOps Web Console frontend layout & dark-theme styling, multi-mode repository ingestion loaders, local Sourcegraph OSS container verification, documentation formatting (`app.py`, `scripts/run_sourcegraph.bat`, `PROJECT_CHARTER.md`, `DEMO_GUIDE.md`) |
+| Team Member | Project Role | Module Responsibilities & Key Deliverables |
+| :--- | :--- | :--- |
+| **Jhalak Kapila** *(Lead)* | Lead AI & DevOps Architect | Core LangChain RAG pipeline, AST code chunking, ChromaDB vector store, Groq LPU acceleration, GitHub Actions CI/CD Quality Gate, Sweep.dev PR Reviewer (`rag_engine.py`, `scripts/ai_pr_reviewer.py`, `.github/workflows/ai-check.yml`, `cli.py`, `Dockerfile`) |
+| **Khushi Hooda** | Testing, Automation & QA Lead | CodiumAI Behavior-driven test generation, Backend Pytest microservice unit suites, Selenium WebDriver headless Chrome E2E browser automation, Flake8 linting gate (`tests/test_sample_repo.py`, `tests/test_ui_selenium.py`) |
+| **Aastha Thakur** | UI/UX & Tool Setup Assistant | Streamlit DevOps Web Console frontend layout & dark-theme styling, multi-mode repository ingestion loaders, local Sourcegraph OSS container verification, documentation formatting (`app.py`, `scripts/run_sourcegraph.bat`, `PROJECT_CHARTER.md`, `DEMO_GUIDE.md`) |

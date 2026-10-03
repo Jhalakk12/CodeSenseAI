@@ -33,9 +33,9 @@
 * **Subtitle:** AST-Aware Semantic Code Retrieval & AI-Driven DevOps Quality Gate
 * **Course:** CSE 4011: Intelligent Developer Tools and AI DevOps Workflows
 * **Team Members & Responsibilities:**
-  * **Jhalak Kapila (Team Lead)** — Core RAG Engine & DevOps Architecture (50%)
-  * **Khushi Hooda** — Automated Testing & Quality Assurance (32%)
-  * **Aastha Thakur** — UI/UX, Ingestion & Tool Setup (18%)
+  * **Jhalak Kapila (Team Lead)** — Core RAG Engine & DevOps Architecture
+  * **Khushi Hooda** — Automated Testing & Quality Assurance
+  * **Aastha Thakur** — UI/UX, Ingestion & Tool Setup
 * **Academic Year:** 7th Semester | Batch 2023–27 | BML Munjal University
 * **GitHub Repository:** `https://github.com/Jhalakk12/CodeSenseAI`
 
