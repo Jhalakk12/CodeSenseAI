@@ -1,7 +1,7 @@
 # CodeSense AI — Phase 2 Progress Report (A2 Evaluation)
 **Course:** CSE 4011: Intelligent Developer Tools and AI DevOps Workflows  
 **Institution:** School of Engineering and Technology, BML Munjal University  
-**Team Members:** Jhalak Kapila (Lead), Khushi Hooda, Aastha Thakur  
+**Team Members:** Jhalak Kapila, Khushi Hooda, Aastha Thakur  
 **Evaluation Schedule:** Mid-Term Examination (October 2026)  
 **Evaluation Component:** A2 — Project Phase Evaluation 2 (Weightage: 30%)  
 

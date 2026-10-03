@@ -1,7 +1,7 @@
 # 📊 CodeSense AI — Mid-Semester Examination Presentation Deck
 **Course:** CSE 4011: Intelligent Developer Tools and AI DevOps Workflows  
 **Institution:** School of Engineering and Technology, BML Munjal University  
-**Team Members:** Jhalak Kapila (Lead), Khushi Hooda, Aastha Thakur  
+**Team Members:** Jhalak Kapila, Khushi Hooda, Aastha Thakur  
 **Project Title:** CodeSense AI: AST-Aware Semantic Code Intelligence & Automated DevOps Quality Gate  
 **Evaluation:** A2 — Mid-Term Project Defense (30% Weightage)  
 
@@ -33,7 +33,7 @@
 * **Subtitle:** AST-Aware Semantic Code Retrieval & AI-Driven DevOps Quality Gate
 * **Course:** CSE 4011: Intelligent Developer Tools and AI DevOps Workflows
 * **Team Members & Responsibilities:**
-  * **Jhalak Kapila (Team Lead)** — Core RAG Engine & DevOps Architecture
+  * **Jhalak Kapila** — Core RAG Engine & DevOps Architecture
   * **Khushi Hooda** — Automated Testing & Quality Assurance
   * **Aastha Thakur** — UI/UX, Ingestion & Tool Setup
 * **Academic Year:** 7th Semester | Batch 2023–27 | BML Munjal University

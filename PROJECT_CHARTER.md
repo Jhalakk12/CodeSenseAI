@@ -2,7 +2,7 @@
 **Course:** CSE 4011: Intelligent Developer Tools and AI DevOps Workflows  
 **Institution:** School of Engineering and Technology, BML Munjal University  
 **Academic Year:** 2026–27 | 7th Semester | Batch 2023–27  
-**Team Members:** Jhalak Kapila (Lead), Khushi Hooda, Aastha Thakur  
+**Team Members:** Jhalak Kapila, Khushi Hooda, Aastha Thakur  
 **Evaluation Component:** A1 — Project Phase Evaluation 1 (Weightage: 30%)  
 
 ---
