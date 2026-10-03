@@ -2,6 +2,7 @@
 **Course:** CSE 4011: Intelligent Developer Tools and AI DevOps Workflows  
 **Institution:** School of Engineering and Technology, BML Munjal University  
 **Academic Year:** 2026–27 | 7th Semester | Batch 2023–27  
+**Team Members:** Jhalak Kapila (Lead), Khushi Hooda, Aastha Thakur  
 **Evaluation Component:** A1 — Project Phase Evaluation 1 (Weightage: 30%)  
 
 ---
@@ -107,9 +108,8 @@ gantt
 
 ## 6. Team Responsibility Matrix
 
-| Team Member / Role | Module Responsibilities | Deliverables |
-| :--- | :--- | :--- |
-| **Lead Developer** | Core RAG Architecture, LangChain Orchestration, ChromaDB Vector Pipeline | `rag_engine.py`, Vector storage, AST chunking logic |
-| **DevOps & CI/CD Specialist** | GitHub Actions Workflow, Flake8 Linters, Pytest Suites, AI PR Diff Reviewer | `.github/workflows/ai-check.yml`, `scripts/ai_pr_reviewer.py` |
-| **Frontend & QA Engineer** | Streamlit Web Console, Dynamic GitHub Cloner, Selenium E2E Automation Test | `app.py`, `tests/test_ui_selenium.py` |
-| **Containerization Lead** | Dockerfile multi-stage optimization, Docker Compose, Podman compatibility | `Dockerfile`, `docker-compose.yml`, VM migration scripts |
+| Team Member | Project Role | Contribution % | Module Responsibilities & Key Deliverables |
+| :--- | :--- | :---: | :--- |
+| **Jhalak Kapila** *(Lead)* | Lead AI & DevOps Architect | **50%** | Core LangChain RAG pipeline, AST code chunking, ChromaDB vector store, Groq LPU acceleration, GitHub Actions CI/CD Quality Gate, Sweep.dev PR Reviewer (`rag_engine.py`, `scripts/ai_pr_reviewer.py`, `.github/workflows/ai-check.yml`, `cli.py`, `Dockerfile`) |
+| **Khushi Hooda** | Testing, Automation & QA Lead | **32%** | CodiumAI Behavior-driven test generation, Backend Pytest microservice unit suites, Selenium WebDriver headless Chrome E2E browser automation, Flake8 linting gate (`tests/test_sample_repo.py`, `tests/test_ui_selenium.py`) |
+| **Aastha Thakur** | UI/UX & Tool Setup Assistant | **18%** | Streamlit DevOps Web Console frontend layout & dark-theme styling, multi-mode repository ingestion loaders, local Sourcegraph OSS container verification, documentation formatting (`app.py`, `scripts/run_sourcegraph.bat`, `PROJECT_CHARTER.md`, `DEMO_GUIDE.md`) |
