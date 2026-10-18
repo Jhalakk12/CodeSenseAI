@@ -85,3 +85,41 @@ def test_streamlit_ui_live_render():
         assert len(body.text) > 0
     finally:
         driver.quit()
+
+
+def test_remediation_tab_ui_render():
+    """Verify that the Sweep.dev PR Auto-Remediation tab renders cleanly in the browser."""
+    from selenium.webdriver.support.ui import WebDriverWait
+    from selenium.webdriver.common.by import By
+
+    server_url = "http://localhost:8501"
+    if not is_server_running("127.0.0.1", 8501):
+        pytest.skip("Streamlit app is not running.")
+
+    driver = get_webdriver()
+    try:
+        driver.get(server_url)
+        WebDriverWait(driver, 15).until(
+            lambda d: "CodeSense AI" in d.title or len(d.find_elements(By.TAG_NAME, "h1")) > 0
+        )
+        def get_tabs(d):
+            found = (
+                d.find_elements(By.CSS_SELECTOR, "button[data-baseweb='tab']") or
+                d.find_elements(By.CSS_SELECTOR, "button[role='tab']") or
+                d.find_elements(By.CSS_SELECTOR, "[data-testid='stTab']")
+            )
+            return found if len(found) >= 2 else False
+
+        tabs = WebDriverWait(driver, 20).until(get_tabs)
+        assert len(tabs) >= 2
+        remediation_tab = [t for t in tabs if any(k in t.text for k in ["Remediation", "Sweep", "PR", "Auto"])]
+        assert len(remediation_tab) > 0
+        remediation_tab[0].click()
+
+        WebDriverWait(driver, 10).until(
+            lambda d: "Sweep.dev" in d.page_source or "Autonomous PR" in d.page_source
+        )
+        assert "Autonomous PR" in driver.page_source or "Sweep.dev" in driver.page_source
+    finally:
+        driver.quit()
+

@@ -18,6 +18,7 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 from dotenv import load_dotenv
 from rag_engine import CodeSenseEngine, check_ollama_status
+from scripts.patch_generator import PatchGenerator, generate_unified_patch
 
 load_dotenv()
 
@@ -40,6 +41,8 @@ Available CLI Commands:
   query <question>    Ask any architecture, logic, or flow question
   security <query>    Run an AI security & vulnerability audit
   test <query>        Generate automated pytest test cases
+  remediate <file>    Generate unified patch & auto-fix (Sweep.dev pattern)
+  rollback <file>     Restore file from .bak backup
   engine [provider]   Switch active engine (groq / ollama) or view status
   model <name>        Change active LLM model name
   review              Run automated AI PR Diff quality audit
@@ -182,6 +185,21 @@ def run_interactive(engine: CodeSenseEngine):
             question = args if args else "Generate comprehensive pytest test cases covering critical logic and error handling."
             execute_query(engine, api_key, question, task_mode="testing", provider=current_provider, model_name=current_model)
 
+        elif cmd in ["remediate", "patch", "fix"]:
+            if not args:
+                print("[!] Usage: remediate <file_path> [optional issue description]\n")
+                continue
+            parts = args.split(" ", 1)
+            target_file = parts[0].strip()
+            issue = parts[1].strip() if len(parts) > 1 else "Audit and remediate security vulnerabilities, exception leaks, and input bugs."
+            execute_remediation(engine, api_key, target_file, issue, provider=current_provider, model_name=current_model)
+
+        elif cmd == "rollback":
+            if not args:
+                print("[!] Usage: rollback <file_path>\n")
+                continue
+            execute_rollback(args.strip())
+
         elif cmd == "review":
             print("\n[*] Triggering automated AI PR Diff Reviewer...")
             try:
@@ -244,6 +262,75 @@ def execute_query(
 
     except Exception as e:
         print(f"\n[!] Query execution failed: {e}\n")
+
+
+def execute_remediation(
+    engine: CodeSenseEngine,
+    api_key: str,
+    file_path: str,
+    issue: str,
+    provider: str = "Groq",
+    model_name: Optional[str] = None,
+    enable_failover: bool = True,
+    auto_apply: bool = False
+):
+    if not os.path.exists(file_path):
+        print(f"\n[!] Error: File '{file_path}' does not exist.\n")
+        return
+
+    if not model_name:
+        model_name = "qwen/qwen3.8-27b" if provider.lower() == "groq" else "qwen2.5:1.5b"
+
+    prov_display = "⚡ Groq Cloud LPU" if provider.lower() == "groq" else "🔒 Local Ollama"
+    print(f"\n[*] Sweep.dev Engine analyzing '{file_path}' using {prov_display} [{model_name}]...")
+    try:
+        patch_gen = PatchGenerator(engine)
+        res = patch_gen.generate_fix(
+            file_path=file_path,
+            issue_description=issue,
+            provider=provider,
+            model_name=model_name,
+            api_key=api_key if provider.lower() == "groq" else None,
+            enable_failover=enable_failover
+        )
+        diff = res.get("patch_diff", "")
+        failover = res.get("failover")
+        if failover and failover.get("triggered"):
+            print(f" [!] ⚠️ Automatic Local Failover Triggered: {failover.get('reason')}")
+
+        print("\n" + "=" * 70)
+        print(f"  PROPOSED UNIFIED GIT DIFF ({res.get('provider_used')} • {res.get('model_used')}):")
+        print("=" * 70)
+        if diff:
+            print(diff)
+        else:
+            print("[*] No code modifications needed; file is already compliant.")
+        print("=" * 70 + "\n")
+
+        if diff:
+            should_apply = auto_apply
+            if not auto_apply and sys.stdin.isatty():
+                try:
+                    choice = input("⚡ Apply this patch directly to file? (Creates .bak backup) [y/N]: ").strip().lower()
+                    should_apply = (choice in ["y", "yes"])
+                except Exception:
+                    should_apply = False
+
+            if should_apply:
+                apply_res = PatchGenerator.apply_patch_to_file(file_path, res["remediated_code"], create_backup=True)
+                print(f" [✓] Patch successfully applied to '{file_path}'!")
+                print(f" [✓] Safety backup created: '{apply_res['backup_path']}'")
+                print(f"     (To rollback anytime: rollback {file_path})\n")
+    except Exception as e:
+        print(f"\n[!] Remediation failed: {e}\n")
+
+
+def execute_rollback(file_path: str):
+    try:
+        PatchGenerator.rollback_patch(file_path)
+        print(f" [✓] Successfully rolled back '{file_path}' from .bak backup.\n")
+    except Exception as e:
+        print(f" [!] Rollback failed: {e}\n")
 
 
 def execute_clone_and_index(engine: CodeSenseEngine, git_url: str, git_token: str = ""):
@@ -339,6 +426,16 @@ def main():
     # review subcommand
     subparsers.add_parser("review", help="Run AI PR Review on git diff")
 
+    # remediate subcommand
+    p_remed = subparsers.add_parser("remediate", help="Generate and apply unified git patch to fix code issues (Sweep.dev pattern)")
+    p_remed.add_argument("file", help="Path to source file to remediate")
+    p_remed.add_argument("--issue", default="Audit and fix security vulnerabilities, exception leaks, and input bugs", help="Description of issue to fix")
+    p_remed.add_argument("--apply", action="store_true", help="Automatically apply the patch to the file (creates .bak backup)")
+    p_remed.add_argument("--rollback", action="store_true", help="Rollback the file using .bak backup")
+    p_remed.add_argument("--provider", "--engine", dest="provider", default="Groq", help="LLM inference provider (Groq or Ollama, default: Groq)")
+    p_remed.add_argument("--model", dest="model", default=None, help="Model name (default: qwen/qwen3.8-27b for Groq, qwen2.5:1.5b for Ollama)")
+    p_remed.add_argument("--no-failover", action="store_true", help="Disable automatic failover to local Ollama on Groq rate limits")
+
     # status subcommand
     subparsers.add_parser("status", help="Show vector index statistics")
 
@@ -367,6 +464,21 @@ def main():
     elif args.command == "test":
         api_key = get_api_key(required=(args.provider.lower() == "groq"))
         execute_query(engine, api_key, args.question, task_mode="testing", provider=args.provider, model_name=args.model, enable_failover=not args.no_failover)
+    elif args.command == "remediate":
+        if args.rollback:
+            execute_rollback(args.file)
+        else:
+            api_key = get_api_key(required=(args.provider.lower() == "groq"))
+            execute_remediation(
+                engine,
+                api_key,
+                args.file,
+                args.issue,
+                provider=args.provider,
+                model_name=args.model,
+                enable_failover=not args.no_failover,
+                auto_apply=args.apply
+            )
     elif args.command == "review":
         from scripts.ai_pr_reviewer import run_ai_review
         run_ai_review()

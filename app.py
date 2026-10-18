@@ -82,13 +82,40 @@ if "indexed" not in st.session_state:
 if "index_stats" not in st.session_state:
     st.session_state.index_stats = None
 
-# Initialize Engine with dynamic reload to prevent stale module caching
-import importlib
-import rag_engine
-importlib.reload(rag_engine)
-from rag_engine import CodeSenseEngine, check_ollama_status
+if "patch_data" not in st.session_state:
+    st.session_state.patch_data = None
 
-engine = CodeSenseEngine()
+if "patch_applied" not in st.session_state:
+    st.session_state.patch_applied = False
+
+# Initialize Engine
+from rag_engine import CodeSenseEngine, check_ollama_status
+from scripts.patch_generator import PatchGenerator, generate_unified_patch
+
+@st.cache_resource
+def get_engine():
+    return CodeSenseEngine()
+
+@st.cache_data(ttl=600)
+def fetch_cached_groq_models(key: str):
+    try:
+        from groq import Groq
+        client = Groq(api_key=key.strip(), timeout=3.0)
+        fetched = client.models.list().data
+        allowed_families = ["qwen", "llama", "mixtral", "gemma", "deepseek"]
+        return [
+            m.id for m in fetched
+            if any(fam in m.id.lower() for fam in allowed_families)
+            and not any(bad in m.id.lower() for bad in ["guard", "whisper", "vision", "embed"])
+        ]
+    except Exception:
+        return []
+
+@st.cache_data(ttl=10)
+def get_cached_ollama_status():
+    return check_ollama_status()
+
+engine = get_engine()
 
 # --- SIDEBAR: Configuration & DevOps Controls ---
 with st.sidebar:
@@ -108,7 +135,7 @@ with st.sidebar:
     provider = "Groq" if "Groq" in engine_choice else "Ollama"
 
     # Live check Ollama daemon
-    ollama_info = check_ollama_status()
+    ollama_info = get_cached_ollama_status()
     ollama_online = ollama_info.get("running", False)
     installed_ollama_models = ollama_info.get("models", [])
 
@@ -122,21 +149,7 @@ with st.sidebar:
             help="Use your existing Groq API key for ultra-fast response times."
         )
 
-        groq_models = []
-        if api_key:
-            try:
-                from groq import Groq
-                client = Groq(api_key=api_key.strip())
-                fetched = client.models.list().data
-                # Strictly whitelist proven generative coding & chat model families
-                allowed_families = ["qwen", "llama", "mixtral", "gemma", "deepseek"]
-                groq_models = [
-                    m.id for m in fetched
-                    if any(fam in m.id.lower() for fam in allowed_families)
-                    and not any(bad in m.id.lower() for bad in ["guard", "whisper", "vision", "embed"])
-                ]
-            except Exception as err:
-                st.caption(f"⚠️ Could not load account models: {err}")
+        groq_models = fetch_cached_groq_models(api_key) if api_key else []
 
         # Fallback if API key not yet entered or fetch returned empty
         if not groq_models:
@@ -465,34 +478,6 @@ st.markdown(
     "Query your repository using **semantic code retrieval (RAG)**, audit for security risks, and generate automated test suites."
 )
 
-# Quick Action Trigger Bar
-col1, col2, col3, col4 = st.columns(4)
-
-selected_task = "general"
-quick_prompt = None
-
-with col1:
-    if st.button("🏗️ Explain Architecture", use_container_width=True):
-        quick_prompt = "Explain the overall architecture and main components of this codebase."
-        selected_task = "general"
-
-with col2:
-    if st.button("🛡️ Security & Bug Audit", use_container_width=True):
-        quick_prompt = "Audit the codebase for security edge-cases, unhandled exceptions, and authentication vulnerabilities."
-        selected_task = "security"
-
-with col3:
-    if st.button("🧪 Generate Unit Tests", use_container_width=True):
-        quick_prompt = "Generate comprehensive pytest test cases for the core functions in this repository."
-        selected_task = "testing"
-
-with col4:
-    if st.button("🧹 Clear Chat", use_container_width=True):
-        st.session_state.messages = []
-        st.rerun()
-
-st.markdown("---")
-
 import re
 
 def render_model_output(text: str):
@@ -509,89 +494,269 @@ def render_model_output(text: str):
     else:
         st.markdown(text)
 
-# Render Chat History
-for msg in st.session_state.messages:
-    with st.chat_message(msg["role"]):
-        if msg["role"] == "assistant":
-            if msg.get("provider_used"):
-                st.markdown(f'<div style="display: inline-block; padding: 2px 10px; background: rgba(59, 130, 246, 0.12); border: 1px solid rgba(59, 130, 246, 0.28); border-radius: 12px; font-size: 0.75rem; color: #93c5fd; margin-bottom: 8px;">🤖 <b>Engine:</b> {msg["provider_used"]} | <b>Model:</b> <code>{msg.get("model_used", "")}</code></div>', unsafe_allow_html=True)
-            render_model_output(msg["content"])
+tab_chat, tab_remediation = st.tabs([
+    "💬 Semantic Code Assistant",
+    "🛠️ PR Auto-Remediation (Sweep.dev Pattern)"
+])
+
+with tab_chat:
+    # Quick Action Trigger Bar
+    col1, col2, col3, col4 = st.columns(4)
+
+    selected_task = "general"
+    quick_prompt = None
+
+    with col1:
+        if st.button("🏗️ Explain Architecture", use_container_width=True):
+            quick_prompt = "Explain the overall architecture and main components of this codebase."
+            selected_task = "general"
+
+    with col2:
+        if st.button("🛡️ Security & Bug Audit", use_container_width=True):
+            quick_prompt = "Audit the codebase for security edge-cases, unhandled exceptions, and authentication vulnerabilities."
+            selected_task = "security"
+
+    with col3:
+        if st.button("🧪 Generate Unit Tests", use_container_width=True):
+            quick_prompt = "Generate comprehensive pytest test cases for the core functions in this repository."
+            selected_task = "testing"
+
+    with col4:
+        if st.button("🧹 Clear Chat", use_container_width=True):
+            st.session_state.messages = []
+            st.rerun()
+
+    st.markdown("---")
+
+    # Render Chat History
+    for msg in st.session_state.messages:
+        with st.chat_message(msg["role"]):
+            if msg["role"] == "assistant":
+                if msg.get("provider_used"):
+                    st.markdown(f'<div style="display: inline-block; padding: 2px 10px; background: rgba(59, 130, 246, 0.12); border: 1px solid rgba(59, 130, 246, 0.28); border-radius: 12px; font-size: 0.75rem; color: #93c5fd; margin-bottom: 8px;">🤖 <b>Engine:</b> {msg["provider_used"]} | <b>Model:</b> <code>{msg.get("model_used", "")}</code></div>', unsafe_allow_html=True)
+                render_model_output(msg["content"])
+            else:
+                st.markdown(msg["content"])
+
+            if "citations" in msg and msg["citations"]:
+                with st.expander(f"🔍 Source Citations ({len(msg['citations'])} code chunks retrieved)"):
+                    for cite in msg["citations"]:
+                        st.markdown(f"""
+                        <div class="citation-box">
+                            <b>📄 Source:</b> <code>{cite['source']}</code> | <b>Relevance:</b> {cite['score']}<br>
+                            <pre style="margin-top: 5px;"><code>{cite['snippet']}</code></pre>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+    # Handle Prompt Submission
+    user_query = st.chat_input("Ask a question about the codebase (e.g. 'How is user authentication handled?')...")
+
+    # If a quick action button was clicked, trigger it
+    if quick_prompt:
+        user_query = quick_prompt
+
+    if user_query:
+        if not api_key and provider == "Groq":
+            st.warning("⚠️ Please provide your Groq API Key in the left sidebar to run the inference (or switch to 🔒 Local Ollama for keyless execution).")
         else:
-            st.markdown(msg["content"])
+            # Check if indexed
+            if not st.session_state.indexed:
+                # Auto-index the sample repo for immediate seamless experience
+                with st.spinner("Auto-indexing repository on first run..."):
+                    stats = engine.index_codebase(target_path)
+                    st.session_state.indexed = True
+                    st.session_state.index_stats = stats
 
-        if "citations" in msg and msg["citations"]:
-            with st.expander(f"🔍 Source Citations ({len(msg['citations'])} code chunks retrieved)"):
-                for cite in msg["citations"]:
-                    st.markdown(f"""
-                    <div class="citation-box">
-                        <b>📄 Source:</b> <code>{cite['source']}</code> | <b>Relevance:</b> {cite['score']}<br>
-                        <pre style="margin-top: 5px;"><code>{cite['snippet']}</code></pre>
-                    </div>
-                    """, unsafe_allow_html=True)
+            # Display user message
+            st.session_state.messages.append({"role": "user", "content": user_query})
+            with st.chat_message("user"):
+                st.markdown(user_query)
 
-# Handle Prompt Submission
-user_query = st.chat_input("Ask a question about the codebase (e.g. 'How is user authentication handled?')...")
+            # Generate response
+            with st.chat_message("assistant"):
+                with st.spinner("Analyzing codebase vectors and generating response..."):
+                    try:
+                        res = engine.query_codebase(
+                            query=user_query,
+                            api_key=api_key if provider == "Groq" else None,
+                            model_name=model_name,
+                            provider=provider,
+                            task_mode=selected_task,
+                            max_tokens=600,
+                            enable_failover=enable_failover
+                        )
+                        
+                        if res.get("failover") and res["failover"].get("triggered"):
+                            st.warning(f"⚠️ **Automatic Local Failover Triggered**:\n{res['failover'].get('reason', '')}")
 
-# If a quick action button was clicked, trigger it
-if quick_prompt:
-    user_query = quick_prompt
+                        provider_used_tag = res.get("provider_used", provider)
+                        model_used_tag = res.get("model_used", model_name)
+                        st.markdown(f'<div style="display: inline-block; padding: 2px 10px; background: rgba(59, 130, 246, 0.12); border: 1px solid rgba(59, 130, 246, 0.28); border-radius: 12px; font-size: 0.75rem; color: #93c5fd; margin-bottom: 8px;">🤖 <b>Engine:</b> {provider_used_tag} | <b>Model:</b> <code>{model_used_tag}</code></div>', unsafe_allow_html=True)
 
-if user_query:
-    if not api_key and provider == "Groq":
-        st.warning("⚠️ Please provide your Groq API Key in the left sidebar to run the inference (or switch to 🔒 Local Ollama for keyless execution).")
+                        render_model_output(res["answer"])
+                        
+                        if res["citations"]:
+                            with st.expander(f"🔍 Source Citations ({len(res['citations'])} code chunks retrieved)"):
+                                for cite in res["citations"]:
+                                    st.markdown(f"""
+                                    <div class="citation-box">
+                                        <b>📄 Source:</b> <code>{cite['source']}</code> | <b>Relevance:</b> {cite['score']}<br>
+                                        <pre style="margin-top: 5px;"><code>{cite['snippet']}</code></pre>
+                                    </div>
+                                    """, unsafe_allow_html=True)
+
+                        st.session_state.messages.append({
+                            "role": "assistant",
+                            "content": res["answer"],
+                            "citations": res["citations"],
+                            "provider_used": provider_used_tag,
+                            "model_used": model_used_tag
+                        })
+                    except Exception as e:
+                        st.error(f"Error generating answer: {str(e)}")
+
+
+with tab_remediation:
+    st.markdown("""
+    <div style="background: rgba(33, 38, 45, 0.85); border: 1px solid #30363d; border-radius: 8px; padding: 14px 18px; margin-bottom: 16px;">
+        <h4 style="margin: 0 0 6px 0; color: #58a6ff;">🛠️ Sweep.dev Autonomous PR Auto-Remediation Engine</h4>
+        <p style="margin: 0; font-size: 0.88rem; color: #8b949e; line-height: 1.5;">
+            Select any file in the indexed repository, describe the required bugfix or hardening archetype, and CodeSense AI will generate a syntactically valid, conflict-free unified git diff (<code>diff --git</code>). Review changes, apply them directly to disk with automatic <code>.bak</code> rollback safety, or download a <code>.patch</code> artifact.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Resolve target directory for candidate files
+    scan_dir = target_path if (target_path and os.path.exists(target_path)) else os.path.join(os.getcwd(), "sample_repo")
+    candidate_files = []
+    if os.path.exists(scan_dir):
+        for root, dirs, files in os.walk(scan_dir):
+            dirs[:] = [d for d in dirs if not d.startswith(".") and d not in ["__pycache__", "venv", ".venv", "chroma_db", "node_modules", "uploaded_repos", "cloned_repos"]]
+            for f in files:
+                if f.endswith((".py", ".js", ".ts", ".java", ".go", ".json", ".md", ".yaml", ".yml", ".html", ".css")):
+                    rel = os.path.relpath(os.path.join(root, f), scan_dir).replace("\\", "/")
+                    candidate_files.append(rel)
+    candidate_files = sorted(candidate_files)
+
+    col_file_sel, col_archetype = st.columns([1, 1])
+
+    with col_file_sel:
+        selected_file_rel = st.selectbox(
+            "📂 Target Source File",
+            options=candidate_files if candidate_files else ["auth/jwt_handler.py", "database/connection.py", "services/deployment_service.py"],
+            help="Choose the file to audit, harden, or refactor."
+        )
+        full_target_file = os.path.join(scan_dir, selected_file_rel) if candidate_files else os.path.join(os.getcwd(), "sample_repo", "auth", "jwt_handler.py")
+
+    with col_archetype:
+        preset_category = st.selectbox(
+            "🎯 Remediation Archetype",
+            [
+                "🛡️ Security Hardening (JWT Secret Fallback & Injection Resistance)",
+                "⚡ Exception & Resource Leak Fix (Connection Pool Exhaustion)",
+                "🧪 Defensive Input Validation & Boundary Checks",
+                "📝 Custom Refactor / Bug Fix Specification"
+            ]
+        )
+
+    # Prepopulate archetype description
+    if "Security Hardening" in preset_category:
+        default_issue = "Eliminate hardcoded fallback secrets ('supersecret'), enforce strict cryptographic verification, and validate input types before signing or decoding."
+    elif "Exception" in preset_category or "Resource Leak" in preset_category:
+        default_issue = "Add robust try/finally resource cleanup to prevent connection leaks, implement max connection limit validation, and handle exhaustion edge cases."
+    elif "Defensive Input" in preset_category:
+        default_issue = "Add defensive boundary checks, sanitize input strings against injection, and reject null or malformed payloads."
     else:
-        # Check if indexed
-        if not st.session_state.indexed:
-            # Auto-index the sample repo for immediate seamless experience
-            with st.spinner("Auto-indexing repository on first run..."):
-                stats = engine.index_codebase(target_path)
-                st.session_state.indexed = True
-                st.session_state.index_stats = stats
+        default_issue = "Refactor the file to improve error resilience, type safety, and code maintainability."
 
-        # Display user message
-        st.session_state.messages.append({"role": "user", "content": user_query})
-        with st.chat_message("user"):
-            st.markdown(user_query)
+    issue_description = st.text_area(
+        "📋 Remediation Requirements / Bug Report",
+        value=default_issue,
+        height=85,
+        help="Specify the bug details, edge case, or security flaw to remediate."
+    )
 
-        # Generate response
-        with st.chat_message("assistant"):
-            with st.spinner("Analyzing codebase vectors and generating response..."):
+    col_btn_gen, col_engine_status = st.columns([1, 1])
+    with col_btn_gen:
+        generate_clicked = st.button("🚀 Generate Auto-Remediation Patch (Sweep.dev Mode)", type="primary", use_container_width=True)
+    with col_engine_status:
+        st.markdown(f'<div style="padding: 9px 12px; background: rgba(56, 139, 253, 0.08); border: 1px solid rgba(56, 139, 253, 0.25); border-radius: 6px; font-size: 0.85rem; color: #58a6ff;">🤖 <b>Active Engine:</b> {provider} | <b>Model:</b> <code>{model_name}</code></div>', unsafe_allow_html=True)
+
+    if generate_clicked:
+        if not api_key and provider == "Groq":
+            st.warning("⚠️ Please provide your Groq API Key in the left sidebar to run the inference (or switch to 🔒 Local Ollama for keyless execution).")
+        else:
+            with st.spinner(f"Analyzing `{selected_file_rel}` and computing unified git patch..."):
                 try:
-                    res = engine.query_codebase(
-                        query=user_query,
-                        api_key=api_key if provider == "Groq" else None,
-                        model_name=model_name,
+                    patch_gen = PatchGenerator(engine)
+                    res = patch_gen.generate_fix(
+                        file_path=full_target_file,
+                        issue_description=issue_description,
                         provider=provider,
-                        task_mode=selected_task,
-                        max_tokens=600,
+                        model_name=model_name,
+                        api_key=api_key if provider == "Groq" else None,
                         enable_failover=enable_failover
                     )
-                    
-                    if res.get("failover") and res["failover"].get("triggered"):
-                        st.warning(f"⚠️ **Automatic Local Failover Triggered**:\n{res['failover'].get('reason', '')}")
-
-                    provider_used_tag = res.get("provider_used", provider)
-                    model_used_tag = res.get("model_used", model_name)
-                    st.markdown(f'<div style="display: inline-block; padding: 2px 10px; background: rgba(59, 130, 246, 0.12); border: 1px solid rgba(59, 130, 246, 0.28); border-radius: 12px; font-size: 0.75rem; color: #93c5fd; margin-bottom: 8px;">🤖 <b>Engine:</b> {provider_used_tag} | <b>Model:</b> <code>{model_used_tag}</code></div>', unsafe_allow_html=True)
-
-                    render_model_output(res["answer"])
-                    
-                    if res["citations"]:
-                        with st.expander(f"🔍 Source Citations ({len(res['citations'])} code chunks retrieved)"):
-                            for cite in res["citations"]:
-                                st.markdown(f"""
-                                <div class="citation-box">
-                                    <b>📄 Source:</b> <code>{cite['source']}</code> | <b>Relevance:</b> {cite['score']}<br>
-                                    <pre style="margin-top: 5px;"><code>{cite['snippet']}</code></pre>
-                                </div>
-                                """, unsafe_allow_html=True)
-
-                    st.session_state.messages.append({
-                        "role": "assistant",
-                        "content": res["answer"],
-                        "citations": res["citations"],
-                        "provider_used": provider_used_tag,
-                        "model_used": model_used_tag
-                    })
+                    st.session_state.patch_data = res
+                    st.session_state.patch_applied = False
+                    st.success("✅ Unified remediation patch generated successfully!")
                 except Exception as e:
-                    st.error(f"Error generating answer: {str(e)}")
+                    st.error(f"Patch generation failed: {str(e)}")
+
+    if st.session_state.patch_data:
+        pdata = st.session_state.patch_data
+        st.markdown("---")
+        st.subheader("📑 Proposed Unified Git Diff")
+        
+        failover_info = pdata.get("failover")
+        if failover_info and failover_info.get("triggered"):
+            st.warning(f"⚠️ **Automatic Local Failover Triggered**:\n{failover_info.get('reason')}")
+
+        st.caption(f"Target File: `{pdata['file_path']}` | Generated by: `{pdata['provider_used']}` (`{pdata['model_used']}`)")
+
+        diff_text = pdata.get("patch_diff", "")
+        if diff_text:
+            st.code(diff_text, language="diff")
+        else:
+            st.info("ℹ️ No syntax changes were needed — the code is already compliant with the specification.")
+
+        diff_tab1, diff_tab2 = st.tabs(["✨ Remediated Code", "📜 Original Code"])
+        with diff_tab1:
+            st.code(pdata.get("remediated_code", ""), language="python")
+        with diff_tab2:
+            st.code(pdata.get("original_code", ""), language="python")
+
+        # Action Buttons Row
+        act_col1, act_col2, act_col3 = st.columns(3)
+        with act_col1:
+            if st.button("⚡ Apply Patch Directly to Disk", use_container_width=True, type="secondary", disabled=st.session_state.patch_applied):
+                try:
+                    apply_res = PatchGenerator.apply_patch_to_file(
+                        pdata["file_path"],
+                        pdata["remediated_code"],
+                        create_backup=True
+                    )
+                    st.session_state.patch_applied = True
+                    st.success(f"✅ Patch applied! Safety backup created at: `{apply_res['backup_path']}`")
+                except Exception as e:
+                    st.error(f"Failed to apply patch: {str(e)}")
+
+        with act_col2:
+            if st.button("↩️ Rollback Changes (.bak)", use_container_width=True, disabled=not st.session_state.patch_applied):
+                try:
+                    PatchGenerator.rollback_patch(pdata["file_path"])
+                    st.session_state.patch_applied = False
+                    st.info("↩️ File successfully rolled back to its original state from backup!")
+                except Exception as e:
+                    st.error(f"Rollback failed: {str(e)}")
+
+        with act_col3:
+            patch_filename = f"{os.path.basename(pdata['file_path'])}.patch"
+            st.download_button(
+                label="💾 Download .patch File",
+                data=diff_text,
+                file_name=patch_filename,
+                mime="text/plain",
+                use_container_width=True
+            )
+
