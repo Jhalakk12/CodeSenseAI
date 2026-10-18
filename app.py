@@ -1,7 +1,16 @@
 import os
+import shutil
 import subprocess
 import zipfile
 import streamlit as st
+import stat
+
+def _remove_readonly(func, path, exc_info):
+    try:
+        os.chmod(path, stat.S_IWRITE)
+        func(path)
+    except Exception:
+        pass
 from dotenv import load_dotenv
 from rag_engine import CodeSenseEngine
 
@@ -258,7 +267,7 @@ with st.sidebar:
 
                     # If user requested force re-clone, delete cached directory
                     if force_reclone and os.path.exists(target_path):
-                        shutil.rmtree(target_path, ignore_errors=True)
+                        shutil.rmtree(target_path, onerror=_remove_readonly)
 
                     # Only treat as cached if target_path exists and has actual files
                     is_valid_cache = False
@@ -268,9 +277,9 @@ with st.sidebar:
                             if cached_files and os.path.exists(os.path.join(target_path, ".git")):
                                 is_valid_cache = True
                             else:
-                                shutil.rmtree(target_path, ignore_errors=True)
+                                shutil.rmtree(target_path, onerror=_remove_readonly)
                         except Exception:
-                            shutil.rmtree(target_path, ignore_errors=True)
+                            shutil.rmtree(target_path, onerror=_remove_readonly)
 
                     if not is_valid_cache:
                         st.info(f"Cloning `{sanitized_display_url}` (shallow clone)...")
@@ -282,7 +291,7 @@ with st.sidebar:
                             env=clone_env
                         )
                         if res.returncode != 0:
-                            shutil.rmtree(target_path, ignore_errors=True)
+                            shutil.rmtree(target_path, onerror=_remove_readonly)
                             raw_err = res.stderr
                             sanitized_err = raw_err
                             if is_private and github_token.strip():
@@ -296,39 +305,29 @@ with st.sidebar:
                             else:
                                 st.error(f"Git clone failed: {sanitized_err}")
                             st.stop()
+                        # Security: Scrub token from git remote config so credentials never persist on disk
+                        subprocess.run(["git", "-C", target_path, "remote", "set-url", "origin", clean_url], capture_output=True)
                         st.success(f"Successfully cloned `{sanitized_display_url}`.")
                     else:
                         st.info(f"Using cached clone at `{target_path}`. Pulling latest changes...")
                         pull_res = subprocess.run(
-                            ["git", "-C", target_path, "-c", "credential.helper=", "-c", "core.askPass=", "pull"],
+                            ["git", "-C", target_path, "-c", "credential.helper=", "-c", "core.askPass=", "pull", auth_clone_url],
                             capture_output=True,
                             text=True,
                             timeout=30,
                             env=clone_env
                         )
                         if pull_res.returncode != 0:
-                            shutil.rmtree(target_path, ignore_errors=True)
-                            re_res = subprocess.run(
-                                git_base_cmd + ["clone", "--depth", "1", auth_clone_url, target_path],
-                                capture_output=True,
-                                text=True,
-                                timeout=30,
-                                env=clone_env
-                            )
-                            if re_res.returncode != 0:
-                                shutil.rmtree(target_path, ignore_errors=True)
-                                raw_err = re_res.stderr
-                                sanitized_err = raw_err
-                                if is_private and github_token.strip():
-                                    sanitized_err = sanitized_err.replace(github_token.strip(), "******")
-                                err_lower = raw_err.lower()
-                                if not is_private and any(kw in err_lower for kw in ["could not read username", "terminal prompts disabled", "authentication failed", "repository not found"]):
-                                    st.error("🔒 **Authentication Required**: This repository appears to be private. Please check the **'🔒 Private Repository Authentication (GitHub PAT)'** checkbox above and provide your GitHub Personal Access Token.")
-                                elif is_private and any(kw in err_lower for kw in ["could not read username", "terminal prompts disabled", "authentication failed", "bad credentials"]):
-                                    st.error(f"🔒 **Authentication Failed**: Invalid or expired GitHub Personal Access Token (PAT). Please verify your token has 'repo' / 'read' permissions. (Error: {sanitized_err})")
-                                else:
-                                    st.error(f"Git clone failed: {sanitized_err}")
+                            pull_err = pull_res.stderr.lower()
+                            if not is_private and any(kw in pull_err for kw in ["could not read username", "terminal prompts disabled", "authentication failed", "repository not found"]):
+                                st.error("🔒 **Authentication Required**: This repository is private. Please check the **'🔒 Private Repository Authentication (GitHub PAT)'** checkbox above and enter your GitHub Personal Access Token to pull updates.")
                                 st.stop()
+                            elif is_private and any(kw in pull_err for kw in ["could not read username", "terminal prompts disabled", "authentication failed", "bad credentials"]):
+                                sanitized_pull_err = pull_res.stderr.replace(github_token.strip(), "******") if (is_private and github_token.strip()) else pull_res.stderr
+                                st.error(f"🔒 **Authentication Failed**: Invalid or expired GitHub Personal Access Token (PAT). (Error: {sanitized_pull_err})")
+                                st.stop()
+                            else:
+                                st.warning(f"⚠️ Could not pull latest changes from remote. Proceeding with existing local clone.")
 
                 elif repo_option == "Upload Codebase (.ZIP Archive)":
                     if not uploaded_zip:

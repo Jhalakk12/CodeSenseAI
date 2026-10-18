@@ -211,6 +211,8 @@ def execute_clone_and_index(engine: CodeSenseEngine, git_url: str, git_token: st
             else:
                 print(f" [!] Clone failed: {sanitized_err}\n")
             return
+        # Security: Scrub token from git remote config so credentials never persist on disk
+        subprocess.run(["git", "-C", target_path, "remote", "set-url", "origin", clean_url], capture_output=True)
         print(f" [✓] Cloned successfully into {target_path}")
     else:
         print(f" [*] Using cached clone at: {target_path}")
