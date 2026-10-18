@@ -4,6 +4,9 @@ Provides language-aware chunking, vector embeddings, and LLM orchestration.
 """
 import os
 import glob
+import json
+import urllib.request
+import urllib.error
 from typing import List, Dict, Any, Optional
 from langchain_community.document_loaders import TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter, Language
@@ -12,6 +15,63 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
+
+
+def check_ollama_status(base_url: str = "http://localhost:11434", timeout: float = 1.5) -> Dict[str, Any]:
+    """
+    Probes the local Ollama daemon to check connectivity and list available models.
+    Returns:
+        dict: {'running': bool, 'models': List[str], 'error': Optional[str]}
+    """
+    clean_url = base_url.rstrip("/")
+    endpoint = f"{clean_url}/api/tags"
+    try:
+        req = urllib.request.Request(endpoint, headers={"User-Agent": "CodeSenseAI"})
+        with urllib.request.urlopen(req, timeout=timeout) as response:
+            if response.status == 200:
+                data = json.loads(response.read().decode("utf-8"))
+                models = [m.get("name") for m in data.get("models", []) if m.get("name")]
+                return {"running": True, "models": models, "error": None}
+    except Exception as e:
+        return {"running": False, "models": [], "error": str(e)}
+    return {"running": False, "models": [], "error": "Unknown status"}
+
+
+def select_best_fallback_model(installed: List[str], preferred_model: str = "") -> str:
+    """
+    Intelligently selects the best instruction-tuned coding model from local Ollama for failover.
+    Avoids base completion models (like raw starcoder) and pure vision/embedding models.
+    """
+    if preferred_model and preferred_model in installed:
+        return preferred_model
+
+    preferred_candidates = [
+        "qwen2.5-coder:1.5b",
+        "qwen2.5-coder:7b-instruct-q6_k",
+        "codellama:latest",
+        "deepseek-r1:1.5b",
+        "gemma3:1b",
+        "gemma3:4b",
+        "deepseek-r1:latest",
+        "qwen2.5:1.5b"
+    ]
+    for cand in preferred_candidates:
+        for m in installed:
+            if cand == m:
+                return m
+
+    for m in installed:
+        m_lower = m.lower()
+        if ("coder" in m_lower or "instruct" in m_lower or "chat" in m_lower) and not any(k in m_lower for k in ["vision", "vl", "embed", "caption"]):
+            return m
+
+    for m in installed:
+        m_lower = m.lower()
+        if not any(bad in m_lower for bad in ["embed", "vision", "moondream", "vl-", "vl:", "caption"]):
+            return m
+
+    return installed[0] if installed else "qwen2.5-coder:1.5b"
+
 
 # Mapping extensions to LangChain languages
 EXT_TO_LANG = {
@@ -138,18 +198,42 @@ class CodeSenseEngine:
             "files": [os.path.relpath(p, target_dir) for p in all_files]
         }
 
+    @staticmethod
+    def _create_ollama_chat(model: str, base_url: str = "http://localhost:11434"):
+        """
+        Initializes an Ollama chat model using langchain-ollama with fallback.
+        """
+        clean_url = base_url.rstrip("/")
+        try:
+            from langchain_ollama import ChatOllama
+            return ChatOllama(
+                model=model,
+                base_url=clean_url,
+                temperature=0.2
+            )
+        except ImportError:
+            from langchain_community.chat_models import ChatOllama
+            return ChatOllama(
+                model=model,
+                base_url=clean_url,
+                temperature=0.2
+            )
+
     def query_codebase(
         self,
         query: str,
-        api_key: str,
-        model_name: str = "llama-3.1-8b-instant",
+        api_key: Optional[str] = None,
+        model_name: str = "qwen/qwen3.8-27b",
         provider: str = "Groq",
         top_k: int = 4,
         task_mode: str = "general",
-        max_tokens: int = 1200
+        max_tokens: int = 1200,
+        ollama_base_url: str = "http://localhost:11434",
+        enable_failover: bool = True
     ) -> Dict[str, Any]:
         """
-        Executes similarity search on ChromaDB, compiles context, and runs LLM inference.
+        Executes similarity search on ChromaDB, compiles context, and runs LLM inference
+        across Cloud Turbo (Groq LPU) or Local Privacy (Ollama) with automatic failover.
         """
         # Similarity search
         results = self.vector_store.similarity_search_with_score(query, k=top_k)
@@ -194,10 +278,18 @@ class CodeSenseEngine:
             ("human", "{question}")
         ])
 
-        # Provider initialization
-        if provider == "Groq":
+        # Provider routing normalization
+        prov_clean = (provider or "groq").strip().lower()
+        is_groq = ("groq" in prov_clean) or ("cloud" in prov_clean)
+        is_ollama = ("ollama" in prov_clean) or ("local" in prov_clean)
+
+        provider_used = "Groq" if is_groq else "Ollama"
+        model_used = model_name
+        failover_info = None
+
+        if is_groq:
             if not api_key:
-                raise ValueError("Groq API Key is required. Please provide it in the sidebar.")
+                raise ValueError("Groq API Key is required for Cloud Turbo mode. Please provide it in the sidebar.")
             # Qwen on Groq free tier enforces a strict 1000 OTPM ceiling. Cap Qwen at 600 tokens.
             limit_ceiling = 600 if "qwen" in model_name.lower() else min(max_tokens, 1024)
             llm = ChatGroq(
@@ -206,13 +298,16 @@ class CodeSenseEngine:
                 temperature=0.2,
                 max_tokens=limit_ceiling
             )
+        elif is_ollama:
+            ollama_status = check_ollama_status(ollama_base_url)
+            if not ollama_status["running"]:
+                raise ConnectionError(
+                    f"Local Ollama daemon is not responding at {ollama_base_url}. "
+                    f"Please start Ollama (`ollama serve`) or switch to Groq Cloud Turbo."
+                )
+            llm = self._create_ollama_chat(model=model_name, base_url=ollama_base_url)
         else:
-            # Fallback for Ollama
-            from langchain_community.chat_models import ChatOllama
-            llm = ChatOllama(
-                model=model_name,
-                temperature=0.2
-            )
+            raise ValueError(f"Unsupported inference provider: '{provider}'. Supported providers are 'Groq' and 'Ollama'.")
 
         chain = prompt_template | llm | StrOutputParser()
 
@@ -224,8 +319,8 @@ class CodeSenseEngine:
             })
         except Exception as e:
             err_msg = str(e).lower()
-            # If rate limited on output tokens per minute (OTPM), retry with reduced token footprint
-            if ("rate_limit" in err_msg or "429" in err_msg or "otpm" in err_msg or "tokens" in err_msg) and provider == "Groq":
+            # If rate limited on output tokens per minute (OTPM), first attempt token reduction
+            if is_groq and ("rate_limit" in err_msg or "429" in err_msg or "otpm" in err_msg or "tokens" in err_msg) and not enable_failover:
                 retry_llm = ChatGroq(
                     groq_api_key=api_key.strip(),
                     model_name=model_name,
@@ -238,11 +333,58 @@ class CodeSenseEngine:
                     "context": context_str,
                     "question": query
                 })
+            elif is_groq and enable_failover:
+                # Automatic Failover to Local Air-Gapped Ollama
+                ollama_status = check_ollama_status(ollama_base_url)
+                if ollama_status["running"]:
+                    installed = ollama_status.get("models", [])
+                    fallback_model = select_best_fallback_model(installed, model_name)
+                    try:
+                        fallback_llm = self._create_ollama_chat(model=fallback_model, base_url=ollama_base_url)
+                        fallback_chain = prompt_template | fallback_llm | StrOutputParser()
+                        response_text = fallback_chain.invoke({
+                            "system_message": system_message,
+                            "context": context_str,
+                            "question": query
+                        })
+                        failover_info = {
+                            "triggered": True,
+                            "reason": f"Groq error ({str(e)[:80]}...). Seamlessly failed over to local private Ollama ({fallback_model}).",
+                            "original_provider": "Groq",
+                            "fallback_provider": "Ollama",
+                            "fallback_model": fallback_model
+                        }
+                        provider_used = f"Ollama (Auto-Failover from Groq)"
+                        model_used = fallback_model
+                    except Exception as fallback_err:
+                        # If failover also errors, raise informative compound error
+                        raise RuntimeError(f"Groq failed ({str(e)}) and Ollama failover failed ({str(fallback_err)})")
+                else:
+                    # Ollama not running, fallback to token-reduced retry if 429
+                    if "rate_limit" in err_msg or "429" in err_msg or "otpm" in err_msg or "tokens" in err_msg:
+                        retry_llm = ChatGroq(
+                            groq_api_key=api_key.strip(),
+                            model_name=model_name,
+                            temperature=0.2,
+                            max_tokens=500
+                        )
+                        retry_chain = prompt_template | retry_llm | StrOutputParser()
+                        response_text = retry_chain.invoke({
+                            "system_message": system_message,
+                            "context": context_str,
+                            "question": query
+                        })
+                    else:
+                        raise e
             else:
                 raise e
 
         return {
             "answer": response_text,
             "citations": citations,
-            "context_used": context_str
+            "context_used": context_str,
+            "provider_used": provider_used,
+            "model_used": model_used,
+            "failover": failover_info
         }
+

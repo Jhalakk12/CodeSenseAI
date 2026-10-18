@@ -86,7 +86,7 @@ if "index_stats" not in st.session_state:
 import importlib
 import rag_engine
 importlib.reload(rag_engine)
-from rag_engine import CodeSenseEngine
+from rag_engine import CodeSenseEngine, check_ollama_status
 
 engine = CodeSenseEngine()
 
@@ -97,20 +97,31 @@ with st.sidebar:
     st.caption("Intelligent Code Assistant & DevOps Pipeline")
     st.markdown("---")
 
-    # API Configuration
-    st.subheader("🔑 LLM Configuration")
-    provider = st.selectbox("Inference Provider", ["Groq", "Ollama"], index=0)
-    
-    default_groq_key = os.getenv("GROQ_API_KEY", "")
-    api_key = st.text_input(
-        "Groq API Key",
-        value=default_groq_key,
-        type="password",
-        placeholder="gsk_...",
-        help="Use your existing Groq API key for ultra-fast response times."
+    # Dual-LLM Engine Configuration
+    st.subheader("🔑 Inference Engine")
+    engine_choice = st.selectbox(
+        "Dual-LLM Engine",
+        ["⚡ Groq Cloud LPU (High-Speed Turbo)", "🔒 Local Ollama (100% Air-Gapped Privacy)"],
+        index=0,
+        help="Switch between cloud LPU speed (Groq) and complete local data privacy (Ollama)."
     )
+    provider = "Groq" if "Groq" in engine_choice else "Ollama"
+
+    # Live check Ollama daemon
+    ollama_info = check_ollama_status()
+    ollama_online = ollama_info.get("running", False)
+    installed_ollama_models = ollama_info.get("models", [])
 
     if provider == "Groq":
+        default_groq_key = os.getenv("GROQ_API_KEY", "")
+        api_key = st.text_input(
+            "Groq API Key",
+            value=default_groq_key,
+            type="password",
+            placeholder="gsk_...",
+            help="Use your existing Groq API key for ultra-fast response times."
+        )
+
         groq_models = []
         if api_key:
             try:
@@ -137,15 +148,13 @@ with st.sidebar:
                 "gemma2-9b-it"
             ]
 
-        # Pick high-capacity Llama models or Qwen as default
+        # Prioritize qwen as requested by user, or high-capacity llama
         default_idx = 0
         for i, m in enumerate(groq_models):
-            if "llama" in m.lower() and "70b" in m.lower():
+            if "qwen" in m.lower():
                 default_idx = i
                 break
-            elif "llama" in m.lower() and "8b" in m.lower():
-                default_idx = i
-            elif "qwen" in m.lower() and default_idx == 0:
+            elif "llama" in m.lower() and "70b" in m.lower():
                 default_idx = i
 
         model_name = st.selectbox(
@@ -155,8 +164,82 @@ with st.sidebar:
             help="Verified generative LLMs available on your Groq account."
         )
         st.caption(f"Selected: `{model_name}`")
+
+        enable_failover = st.checkbox(
+            "🛡️ Automatic Local Failover",
+            value=True,
+            help="If Groq hits rate limits (429/OTPM) or network hiccups, queries automatically fall back to your local Ollama instance."
+        )
+        if ollama_online:
+            st.caption("🟢 Local Ollama Online (`localhost:11434`) • Hot-Standby")
+        else:
+            st.caption("⚪ Local Ollama offline (Start `ollama serve` for local failover)")
     else:
-        model_name = st.text_input("Ollama Model Name", value="deepseek-coder:6.7b")
+        # Local Privacy Mode (Ollama)
+        api_key = ""  # Zero API key required
+        enable_failover = False
+
+        if ollama_online:
+            st.success("🟢 Local Ollama Online (`localhost:11434`)")
+            st.markdown("""
+            <div style="background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 8px; padding: 10px; margin-bottom: 12px; font-size: 0.82rem; color: #10b981;">
+                🔒 <b>Air-Gapped Privacy Active</b>: All code context, AST chunks, and embeddings remain 100% on this local machine. Zero external API calls.
+            </div>
+            """, unsafe_allow_html=True)
+
+            # Filter out non-generative models (e.g. text embedding models)
+            filtered_installed = [
+                m for m in installed_ollama_models
+                if not any(k in m.lower() for k in ["embed", "caption"])
+            ]
+            # Prioritize dedicated code-instruct models
+            def _model_priority(name: str) -> int:
+                n = name.lower()
+                if "qwen2.5-coder:1.5b" in n:
+                    return 0
+                if "qwen2.5-coder" in n:
+                    return 1
+                if "codellama" in n:
+                    return 2
+                if "deepseek" in n:
+                    return 3
+                if "gemma" in n:
+                    return 4
+                return 10
+
+            sorted_installed = sorted(filtered_installed, key=_model_priority)
+
+            syllabus_presets = ["qwen2.5-coder:1.5b", "qwen2.5-coder:7b", "deepseek-coder:6.7b", "codellama:7b", "gemma3:1b"]
+            all_options = []
+            for m in sorted_installed:
+                all_options.append(f"{m} (Installed)")
+            for m in syllabus_presets:
+                if m not in sorted_installed:
+                    all_options.append(f"{m} (Requires pull)")
+
+            selected_opt = st.selectbox(
+                "Local Model",
+                all_options,
+                index=0,
+                help="Installed local models detected in Ollama or syllabus-recommended presets."
+            )
+            model_name = selected_opt.split(" ")[0].strip() if selected_opt else "qwen2.5-coder:1.5b"
+
+            if "(Requires pull)" in selected_opt:
+                st.info(f"💡 Run in terminal to pull: `ollama pull {model_name}`")
+            else:
+                st.caption(f"Ready: `{model_name}` (Local Hardware)")
+        else:
+            st.error("🔴 Local Ollama daemon not detected at `localhost:11434`")
+            st.markdown("""
+            <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; padding: 10px; margin-bottom: 12px; font-size: 0.82rem; color: #f87171;">
+                ⚠️ <b>Ollama is not running</b>.<br>
+                1. Open PowerShell<br>
+                2. Run <code>ollama serve</code><br>
+                3. Refresh this page to activate Local Air-Gapped mode.
+            </div>
+            """, unsafe_allow_html=True)
+            model_name = st.text_input("Custom Ollama Model", value="qwen2.5:1.5b")
 
     st.markdown("---")
 
@@ -430,6 +513,8 @@ def render_model_output(text: str):
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         if msg["role"] == "assistant":
+            if msg.get("provider_used"):
+                st.markdown(f'<div style="display: inline-block; padding: 2px 10px; background: rgba(59, 130, 246, 0.12); border: 1px solid rgba(59, 130, 246, 0.28); border-radius: 12px; font-size: 0.75rem; color: #93c5fd; margin-bottom: 8px;">🤖 <b>Engine:</b> {msg["provider_used"]} | <b>Model:</b> <code>{msg.get("model_used", "")}</code></div>', unsafe_allow_html=True)
             render_model_output(msg["content"])
         else:
             st.markdown(msg["content"])
@@ -453,7 +538,7 @@ if quick_prompt:
 
 if user_query:
     if not api_key and provider == "Groq":
-        st.warning("⚠️ Please provide your Groq API Key in the left sidebar to run the inference.")
+        st.warning("⚠️ Please provide your Groq API Key in the left sidebar to run the inference (or switch to 🔒 Local Ollama for keyless execution).")
     else:
         # Check if indexed
         if not st.session_state.indexed:
@@ -474,13 +559,21 @@ if user_query:
                 try:
                     res = engine.query_codebase(
                         query=user_query,
-                        api_key=api_key,
+                        api_key=api_key if provider == "Groq" else None,
                         model_name=model_name,
                         provider=provider,
                         task_mode=selected_task,
-                        max_tokens=600
+                        max_tokens=600,
+                        enable_failover=enable_failover
                     )
                     
+                    if res.get("failover") and res["failover"].get("triggered"):
+                        st.warning(f"⚠️ **Automatic Local Failover Triggered**:\n{res['failover'].get('reason', '')}")
+
+                    provider_used_tag = res.get("provider_used", provider)
+                    model_used_tag = res.get("model_used", model_name)
+                    st.markdown(f'<div style="display: inline-block; padding: 2px 10px; background: rgba(59, 130, 246, 0.12); border: 1px solid rgba(59, 130, 246, 0.28); border-radius: 12px; font-size: 0.75rem; color: #93c5fd; margin-bottom: 8px;">🤖 <b>Engine:</b> {provider_used_tag} | <b>Model:</b> <code>{model_used_tag}</code></div>', unsafe_allow_html=True)
+
                     render_model_output(res["answer"])
                     
                     if res["citations"]:
@@ -496,7 +589,9 @@ if user_query:
                     st.session_state.messages.append({
                         "role": "assistant",
                         "content": res["answer"],
-                        "citations": res["citations"]
+                        "citations": res["citations"],
+                        "provider_used": provider_used_tag,
+                        "model_used": model_used_tag
                     })
                 except Exception as e:
                     st.error(f"Error generating answer: {str(e)}")

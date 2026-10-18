@@ -8,6 +8,7 @@ import os
 import sys
 import argparse
 import warnings
+from typing import Optional, List, Dict, Any
 
 # Suppress deprecation notices from underlying LangChain/transformers for clean CLI UX
 warnings.filterwarnings("ignore")
@@ -16,7 +17,7 @@ warnings.filterwarnings("ignore")
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 from dotenv import load_dotenv
-from rag_engine import CodeSenseEngine
+from rag_engine import CodeSenseEngine, check_ollama_status
 
 load_dotenv()
 
@@ -34,37 +35,64 @@ ASCII_BANNER = r"""
 def print_help():
     print("""
 Available CLI Commands:
-  index <path>       Index a codebase directory (default: ./sample_repo)
-  clone <url> [pat]  Clone and index a public or private GitHub repository
-  query <question>   Ask any architecture, logic, or flow question
-  security <query>   Run an AI security & vulnerability audit
-  test <query>       Generate automated pytest test cases
-  review             Run automated AI PR Diff quality audit
-  status             View ChromaDB vector collection statistics
-  help               Display this help message
-  exit / quit        Exit the CLI
+  index <path>        Index a codebase directory (default: ./sample_repo)
+  clone <url> [pat]   Clone and index a public or private GitHub repository
+  query <question>    Ask any architecture, logic, or flow question
+  security <query>    Run an AI security & vulnerability audit
+  test <query>        Generate automated pytest test cases
+  engine [provider]   Switch active engine (groq / ollama) or view status
+  model <name>        Change active LLM model name
+  review              Run automated AI PR Diff quality audit
+  status              View ChromaDB vector collection statistics
+  help                Display this help message
+  exit / quit         Exit the CLI
 """)
 
 
-def get_api_key() -> str:
+def get_api_key(required: bool = True) -> str:
     key = os.getenv("GROQ_API_KEY", "").strip()
-    if not key:
+    if not key and required:
         print("\n[!] Error: GROQ_API_KEY not found in environment or .env file.")
-        print("    Please set GROQ_API_KEY in your .env file or export GROQ_API_KEY='gsk_...'\n")
+        print("    Please set GROQ_API_KEY in your .env file or export GROQ_API_KEY='gsk_...'")
+        print("    Or switch to local air-gapped mode using: engine ollama\n")
         sys.exit(1)
     return key
 
 
 def run_interactive(engine: CodeSenseEngine):
     print(ASCII_BANNER)
-    api_key = get_api_key()
-    print(" [✓] Engine initialized with Groq LPU acceleration")
+    
+    # Check Ollama status
+    ollama_stat = check_ollama_status()
+    ollama_online = ollama_stat.get("running", False)
+    installed_models = ollama_stat.get("models", [])
+
+    current_provider = "Groq"
+    current_model = "qwen/qwen3.8-27b"
+    api_key = os.getenv("GROQ_API_KEY", "").strip()
+
+    if api_key:
+        print(" [✓] Engine: ⚡ Groq Cloud LPU (Default: qwen/qwen3.8-27b)")
+    else:
+        if ollama_online:
+            current_provider = "Ollama"
+            current_model = installed_models[0] if installed_models else "qwen2.5:1.5b"
+            print(f" [✓] GROQ_API_KEY not found; auto-selected 🔒 Local Ollama ({current_model})")
+        else:
+            print(" [!] GROQ_API_KEY not set and Ollama is offline. Set GROQ_API_KEY or start Ollama.")
+
+    if ollama_online:
+        print(f" [✓] Local Ollama Online: localhost:11434 (Installed: {', '.join(installed_models)})")
+    else:
+        print(" [-] Local Ollama offline (Start 'ollama serve' to enable Air-Gapped mode)")
+
     print(" [✓] Embeddings: sentence-transformers/all-MiniLM-L6-v2")
     print(" Type 'help' for available commands, or 'exit' to quit.\n")
 
     while True:
         try:
-            user_input = input("codesense> ").strip()
+            prompt_label = f"codesense [{current_provider}:{current_model}]> "
+            user_input = input(prompt_label).strip()
         except (KeyboardInterrupt, EOFError):
             print("\nExiting CodeSense AI CLI. Goodbye!")
             break
@@ -82,6 +110,35 @@ def run_interactive(engine: CodeSenseEngine):
 
         elif cmd in ["help", "h"]:
             print_help()
+
+        elif cmd == "engine":
+            if not args:
+                print(f"\n[+] Active Engine: {current_provider} (Model: {current_model})")
+                print(f"[+] Ollama Status: {'Online' if ollama_online else 'Offline'} (localhost:11434)")
+                if installed_models:
+                    print(f"[+] Installed Ollama Models: {', '.join(installed_models)}")
+                print("    To switch: engine groq  OR  engine ollama\n")
+            else:
+                arg_lower = args.lower()
+                if "groq" in arg_lower:
+                    current_provider = "Groq"
+                    current_model = "qwen/qwen3.8-27b"
+                    if not api_key:
+                        api_key = get_api_key(required=False)
+                    print(f" [✓] Switched to ⚡ Groq Cloud LPU ({current_model})\n")
+                elif "ollama" in arg_lower or "local" in arg_lower:
+                    current_provider = "Ollama"
+                    current_model = installed_models[0] if installed_models else "qwen2.5:1.5b"
+                    print(f" [✓] Switched to 🔒 Local Air-Gapped Ollama ({current_model})\n")
+                else:
+                    print(f" [!] Unknown engine '{args}'. Available: groq, ollama\n")
+
+        elif cmd == "model":
+            if not args:
+                print(f"\n[+] Current Model: {current_model}\n")
+            else:
+                current_model = args.strip()
+                print(f" [✓] Model set to: {current_model}\n")
 
         elif cmd in ["clone", "index-git"]:
             if not args:
@@ -106,7 +163,8 @@ def run_interactive(engine: CodeSenseEngine):
             try:
                 count = engine.vector_store._collection.count()
                 print(f"\n[+] Vector Store Persist Dir: {engine.persist_dir}")
-                print(f"[+] Total Chunks in ChromaDB: {count}\n")
+                print(f"[+] Total Chunks in ChromaDB: {count}")
+                print(f"[+] Active Engine: {current_provider} ({current_model})\n")
             except Exception as e:
                 print(f"\n[!] Could not retrieve stats: {e}\n")
 
@@ -114,15 +172,15 @@ def run_interactive(engine: CodeSenseEngine):
             if not args:
                 print("[!] Please specify a question. Example: query How does authentication work?\n")
                 continue
-            execute_query(engine, api_key, args, task_mode="general")
+            execute_query(engine, api_key, args, task_mode="general", provider=current_provider, model_name=current_model)
 
         elif cmd in ["security", "audit"]:
             question = args if args else "Identify security vulnerabilities, SQL injection, or unhandled exceptions in the codebase."
-            execute_query(engine, api_key, question, task_mode="security")
+            execute_query(engine, api_key, question, task_mode="security", provider=current_provider, model_name=current_model)
 
         elif cmd in ["test", "tests"]:
             question = args if args else "Generate comprehensive pytest test cases covering critical logic and error handling."
-            execute_query(engine, api_key, question, task_mode="testing")
+            execute_query(engine, api_key, question, task_mode="testing", provider=current_provider, model_name=current_model)
 
         elif cmd == "review":
             print("\n[*] Triggering automated AI PR Diff Reviewer...")
@@ -134,22 +192,43 @@ def run_interactive(engine: CodeSenseEngine):
 
         else:
             # If no command prefix matches, treat entire input as a query
-            execute_query(engine, api_key, user_input, task_mode="general")
+            execute_query(engine, api_key, user_input, task_mode="general", provider=current_provider, model_name=current_model)
 
 
-def execute_query(engine: CodeSenseEngine, api_key: str, question: str, task_mode: str = "general"):
-    print(f"\n[*] Searching vector store and querying Groq LPU ({task_mode} mode)...")
+def execute_query(
+    engine: CodeSenseEngine,
+    api_key: str,
+    question: str,
+    task_mode: str = "general",
+    provider: str = "Groq",
+    model_name: Optional[str] = None,
+    enable_failover: bool = True
+):
+    if not model_name:
+        model_name = "qwen/qwen3.8-27b" if provider.lower() == "groq" else "qwen2.5:1.5b"
+    
+    prov_display = "⚡ Groq Cloud LPU" if provider.lower() == "groq" else "🔒 Local Ollama"
+    print(f"\n[*] Searching vector store and querying {prov_display} [{model_name}] ({task_mode} mode)...")
     try:
         response = engine.query_codebase(
             query=question,
-            api_key=api_key,
-            model_name="qwen/qwen3.8-27b",
+            api_key=api_key if provider.lower() == "groq" else None,
+            model_name=model_name,
+            provider=provider,
             task_mode=task_mode,
-            max_tokens=600
+            max_tokens=600,
+            enable_failover=enable_failover
         )
 
+        failover = response.get("failover")
+        if failover and failover.get("triggered"):
+            print(f"\n[!] ⚠️  Automatic Local Failover Triggered:")
+            print(f"    {failover.get('reason')}\n")
+
+        provider_label = response.get("provider_used", provider)
+        model_label = response.get("model_used", model_name)
         print("\n" + "=" * 70)
-        print("  CodeSense AI Response:")
+        print(f"  CodeSense AI Response [{provider_label} • {model_label}]:")
         print("=" * 70)
         print(response.get("answer", "").strip())
         print("=" * 70)
@@ -251,6 +330,12 @@ def main():
     p_test = subparsers.add_parser("test", help="Generate automated unit test cases")
     p_test.add_argument("question", nargs="?", default="Generate unit tests for this codebase", help="Optional test generation prompt")
 
+    # Add shared provider and model arguments to query, security, and test subparsers
+    for p in [p_query, p_sec, p_test]:
+        p.add_argument("--provider", "--engine", dest="provider", default="Groq", help="LLM inference provider (Groq or Ollama, default: Groq)")
+        p.add_argument("--model", dest="model", default=None, help="Model name (default: qwen/qwen3.8-27b for Groq, qwen2.5:1.5b for Ollama)")
+        p.add_argument("--no-failover", action="store_true", help="Disable automatic failover to local Ollama on Groq rate limits")
+
     # review subcommand
     subparsers.add_parser("review", help="Run AI PR Review on git diff")
 
@@ -274,14 +359,14 @@ def main():
         count = engine.vector_store._collection.count()
         print(f"[+] Total Chunks in ChromaDB: {count}")
     elif args.command == "query":
-        api_key = get_api_key()
-        execute_query(engine, api_key, args.question, task_mode="general")
+        api_key = get_api_key(required=(args.provider.lower() == "groq"))
+        execute_query(engine, api_key, args.question, task_mode="general", provider=args.provider, model_name=args.model, enable_failover=not args.no_failover)
     elif args.command == "security":
-        api_key = get_api_key()
-        execute_query(engine, api_key, args.question, task_mode="security")
+        api_key = get_api_key(required=(args.provider.lower() == "groq"))
+        execute_query(engine, api_key, args.question, task_mode="security", provider=args.provider, model_name=args.model, enable_failover=not args.no_failover)
     elif args.command == "test":
-        api_key = get_api_key()
-        execute_query(engine, api_key, args.question, task_mode="testing")
+        api_key = get_api_key(required=(args.provider.lower() == "groq"))
+        execute_query(engine, api_key, args.question, task_mode="testing", provider=args.provider, model_name=args.model, enable_failover=not args.no_failover)
     elif args.command == "review":
         from scripts.ai_pr_reviewer import run_ai_review
         run_ai_review()
