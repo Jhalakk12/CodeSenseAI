@@ -192,6 +192,12 @@ with st.sidebar:
             )
             st.caption("🛡️ **Enterprise Data Privacy**: Token is held in ephemeral RAM only during git clone and is never logged, stored on disk, or indexed into ChromaDB.")
 
+        force_reclone = st.checkbox(
+            "🔄 Force Fresh Re-Clone (Bypass Cache)",
+            value=False,
+            help="Delete any local cached copy and clone fresh from GitHub."
+        )
+
         repo_name = github_url.rstrip("/").split("/")[-1].replace(".git", "") if github_url else "repo"
         target_path = os.path.join(os.getcwd(), "cloned_repos", repo_name)
     elif repo_option == "Upload Codebase (.ZIP Archive)":
@@ -238,19 +244,45 @@ with st.sidebar:
 
                     sanitized_display_url = github_url.strip()
 
-                    clone_env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
-                    git_base_cmd = ["git", "-c", "credential.helper="]
+                    clone_env = {
+                        **os.environ,
+                        "GIT_TERMINAL_PROMPT": "0",
+                        "GCM_INTERACTIVE": "never",
+                        "GIT_ASKPASS": "",
+                    }
+                    git_base_cmd = [
+                        "git",
+                        "-c", "credential.helper=",
+                        "-c", "core.askPass=",
+                    ]
 
-                    if not os.path.exists(target_path):
+                    # If user requested force re-clone, delete cached directory
+                    if force_reclone and os.path.exists(target_path):
+                        shutil.rmtree(target_path, ignore_errors=True)
+
+                    # Only treat as cached if target_path exists and has actual files
+                    is_valid_cache = False
+                    if os.path.exists(target_path):
+                        try:
+                            cached_files = [f for f in os.listdir(target_path) if f != ".git"]
+                            if cached_files and os.path.exists(os.path.join(target_path, ".git")):
+                                is_valid_cache = True
+                            else:
+                                shutil.rmtree(target_path, ignore_errors=True)
+                        except Exception:
+                            shutil.rmtree(target_path, ignore_errors=True)
+
+                    if not is_valid_cache:
                         st.info(f"Cloning `{sanitized_display_url}` (shallow clone)...")
                         res = subprocess.run(
                             git_base_cmd + ["clone", "--depth", "1", auth_clone_url, target_path],
                             capture_output=True,
                             text=True,
-                            timeout=120,
+                            timeout=30,
                             env=clone_env
                         )
                         if res.returncode != 0:
+                            shutil.rmtree(target_path, ignore_errors=True)
                             raw_err = res.stderr
                             sanitized_err = raw_err
                             if is_private and github_token.strip():
@@ -268,24 +300,23 @@ with st.sidebar:
                     else:
                         st.info(f"Using cached clone at `{target_path}`. Pulling latest changes...")
                         pull_res = subprocess.run(
-                            ["git", "-C", target_path, "-c", "credential.helper=", "pull"],
+                            ["git", "-C", target_path, "-c", "credential.helper=", "-c", "core.askPass=", "pull"],
                             capture_output=True,
                             text=True,
-                            timeout=60,
+                            timeout=30,
                             env=clone_env
                         )
                         if pull_res.returncode != 0:
-                            # Re-clone cleanly if cached pull fails (e.g. auth update or diverged history)
-                            import shutil
                             shutil.rmtree(target_path, ignore_errors=True)
                             re_res = subprocess.run(
                                 git_base_cmd + ["clone", "--depth", "1", auth_clone_url, target_path],
                                 capture_output=True,
                                 text=True,
-                                timeout=120,
+                                timeout=30,
                                 env=clone_env
                             )
                             if re_res.returncode != 0:
+                                shutil.rmtree(target_path, ignore_errors=True)
                                 raw_err = re_res.stderr
                                 sanitized_err = raw_err
                                 if is_private and github_token.strip():
