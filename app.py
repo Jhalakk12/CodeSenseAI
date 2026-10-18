@@ -173,8 +173,25 @@ with st.sidebar:
             "GitHub Repository URL",
             value="https://github.com/pallets/flask",
             placeholder="https://github.com/username/repository",
-            help="Provide any public GitHub repository to clone and index its AST code vectors."
+            help="Provide any public or private GitHub repository to clone and index its AST code vectors."
         )
+        is_private = st.checkbox(
+            "🔒 Private Repository Authentication (GitHub PAT)",
+            value=False,
+            help="Enable if this is a private GitHub repository requiring authentication."
+        )
+        github_token = ""
+        if is_private:
+            default_token = os.getenv("GITHUB_PAT") or os.getenv("GITHUB_TOKEN") or ""
+            github_token = st.text_input(
+                "GitHub Personal Access Token (PAT)",
+                value=default_token,
+                type="password",
+                placeholder="ghp_xxxxxxxxxxxxxxxxxxxx",
+                help="Fine-grained or classic token with read access. Token is held in ephemeral RAM only."
+            )
+            st.caption("🛡️ **Enterprise Data Privacy**: Token is held in ephemeral RAM only during git clone and is never logged, stored on disk, or indexed into ChromaDB.")
+
         repo_name = github_url.rstrip("/").split("/")[-1].replace(".git", "") if github_url else "repo"
         target_path = os.path.join(os.getcwd(), "cloned_repos", repo_name)
     elif repo_option == "Upload Codebase (.ZIP Archive)":
@@ -198,21 +215,63 @@ with st.sidebar:
                     if not github_url or not github_url.startswith(("http://", "https://", "git@")):
                         st.error("Please enter a valid GitHub repository URL.")
                         st.stop()
+
+                    if is_private and not github_token.strip():
+                        st.error("🔒 Please provide a GitHub Personal Access Token (PAT) for private repository access.")
+                        st.stop()
+
                     os.makedirs(os.path.join(os.getcwd(), "cloned_repos"), exist_ok=True)
+
+                    # Prepare authenticated clone URL if private token provided
+                    clean_url = github_url.strip()
+                    if is_private and github_token.strip():
+                        token = github_token.strip()
+                        if "github.com" in clean_url:
+                            repo_part = clean_url.split("github.com")[-1].lstrip("/:")
+                            if not repo_part.endswith(".git"):
+                                repo_part += ".git"
+                            auth_clone_url = f"https://x-access-token:{token}@github.com/{repo_part}"
+                        else:
+                            auth_clone_url = clean_url.replace("https://", f"https://x-access-token:{token}@")
+                    else:
+                        auth_clone_url = clean_url
+
+                    sanitized_display_url = github_url.strip()
+
                     if not os.path.exists(target_path):
-                        st.info(f"Cloning `{github_url}` (shallow clone)...")
+                        st.info(f"Cloning `{sanitized_display_url}` (shallow clone)...")
                         res = subprocess.run(
-                            ["git", "clone", "--depth", "1", github_url.strip(), target_path],
+                            ["git", "clone", "--depth", "1", auth_clone_url, target_path],
                             capture_output=True,
                             text=True,
                             timeout=120
                         )
                         if res.returncode != 0:
-                            st.error(f"Git clone failed: {res.stderr}")
+                            sanitized_err = res.stderr
+                            if is_private and github_token.strip():
+                                sanitized_err = sanitized_err.replace(github_token.strip(), "******")
+                            st.error(f"Git clone failed: {sanitized_err}")
                             st.stop()
+                        st.success(f"Successfully cloned `{sanitized_display_url}`.")
                     else:
                         st.info(f"Using cached clone at `{target_path}`. Pulling latest changes...")
-                        subprocess.run(["git", "-C", target_path, "pull"], capture_output=True, text=True, timeout=60)
+                        pull_res = subprocess.run(["git", "-C", target_path, "pull"], capture_output=True, text=True, timeout=60)
+                        if pull_res.returncode != 0:
+                            # Re-clone cleanly if cached pull fails (e.g. auth update or diverged history)
+                            import shutil
+                            shutil.rmtree(target_path, ignore_errors=True)
+                            re_res = subprocess.run(
+                                ["git", "clone", "--depth", "1", auth_clone_url, target_path],
+                                capture_output=True,
+                                text=True,
+                                timeout=120
+                            )
+                            if re_res.returncode != 0:
+                                sanitized_err = re_res.stderr
+                                if is_private and github_token.strip():
+                                    sanitized_err = sanitized_err.replace(github_token.strip(), "******")
+                                st.error(f"Git clone failed: {sanitized_err}")
+                                st.stop()
 
                 elif repo_option == "Upload Codebase (.ZIP Archive)":
                     if not uploaded_zip:

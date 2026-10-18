@@ -35,6 +35,7 @@ def print_help():
     print("""
 Available CLI Commands:
   index <path>       Index a codebase directory (default: ./sample_repo)
+  clone <url> [pat]  Clone and index a public or private GitHub repository
   query <question>   Ask any architecture, logic, or flow question
   security <query>   Run an AI security & vulnerability audit
   test <query>       Generate automated pytest test cases
@@ -81,6 +82,15 @@ def run_interactive(engine: CodeSenseEngine):
 
         elif cmd in ["help", "h"]:
             print_help()
+
+        elif cmd in ["clone", "index-git"]:
+            if not args:
+                print("[!] Please provide a repository URL. Example: clone https://github.com/org/repo [token]\n")
+                continue
+            parts = args.split(" ")
+            git_url = parts[0].strip()
+            git_token = parts[1].strip() if len(parts) > 1 else (os.getenv("GITHUB_PAT") or os.getenv("GITHUB_TOKEN") or "")
+            execute_clone_and_index(engine, git_url, git_token)
 
         elif cmd == "index":
             target = args if args else "./sample_repo"
@@ -157,9 +167,54 @@ def execute_query(engine: CodeSenseEngine, api_key: str, question: str, task_mod
         print(f"\n[!] Query execution failed: {e}\n")
 
 
+def execute_clone_and_index(engine: CodeSenseEngine, git_url: str, git_token: str = ""):
+    import subprocess
+    repo_name = git_url.rstrip("/").split("/")[-1].replace(".git", "") if git_url else "repo"
+    target_path = os.path.join(os.getcwd(), "cloned_repos", repo_name)
+    os.makedirs(os.path.join(os.getcwd(), "cloned_repos"), exist_ok=True)
+    
+    clean_url = git_url.strip()
+    if git_token:
+        token = git_token.strip()
+        if "github.com" in clean_url:
+            repo_part = clean_url.split("github.com")[-1].lstrip("/:")
+            if not repo_part.endswith(".git"):
+                repo_part += ".git"
+            auth_clone_url = f"https://x-access-token:{token}@github.com/{repo_part}"
+        else:
+            auth_clone_url = clean_url.replace("https://", f"https://x-access-token:{token}@")
+        print(f"\n[*] Cloning private repository `{git_url}` using authenticated PAT...")
+    else:
+        auth_clone_url = clean_url
+        print(f"\n[*] Cloning repository `{git_url}` (shallow clone)...")
+
+    if not os.path.exists(target_path):
+        res = subprocess.run(["git", "clone", "--depth", "1", auth_clone_url, target_path], capture_output=True, text=True, timeout=120)
+        if res.returncode != 0:
+            err = res.stderr.replace(git_token.strip(), "******") if git_token else res.stderr
+            print(f" [!] Clone failed: {err}\n")
+            return
+        print(f" [✓] Cloned successfully into {target_path}")
+    else:
+        print(f" [*] Using cached clone at: {target_path}")
+
+    print(f"[*] Indexing AST code vectors into ChromaDB...")
+    try:
+        stats = engine.index_codebase(target_path)
+        print(f" [✓] Successfully indexed {stats['indexed_files']} files into {stats['total_chunks']} AST chunks.")
+        print(f" [✓] Files indexed: {', '.join(stats['files'])}\n")
+    except Exception as e:
+        print(f" [!] Indexing failed: {e}\n")
+
+
 def main():
     parser = argparse.ArgumentParser(description="CodeSense AI - Terminal Command Line Interface (CLI)")
     subparsers = parser.add_subparsers(dest="command", help="CLI Subcommands")
+
+    # clone subcommand
+    p_clone = subparsers.add_parser("clone", help="Clone and index a public or private GitHub repository")
+    p_clone.add_argument("url", help="GitHub repository URL")
+    p_clone.add_argument("--pat", "--token", dest="token", default="", help="Optional GitHub Personal Access Token for private repos")
 
     # index subcommand
     p_index = subparsers.add_parser("index", help="Index a codebase directory")
@@ -189,6 +244,9 @@ def main():
     if not args.command:
         # Interactive REPL mode
         run_interactive(engine)
+    elif args.command == "clone":
+        token = args.token or os.getenv("GITHUB_PAT") or os.getenv("GITHUB_TOKEN") or ""
+        execute_clone_and_index(engine, args.url, token)
     elif args.command == "index":
         print(f"[*] Indexing codebase at: {args.path} ...")
         stats = engine.index_codebase(args.path)
