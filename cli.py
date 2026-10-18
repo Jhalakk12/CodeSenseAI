@@ -188,11 +188,28 @@ def execute_clone_and_index(engine: CodeSenseEngine, git_url: str, git_token: st
         auth_clone_url = clean_url
         print(f"\n[*] Cloning repository `{git_url}` (shallow clone)...")
 
+    clone_env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
+    git_base_cmd = ["git", "-c", "credential.helper="]
+
     if not os.path.exists(target_path):
-        res = subprocess.run(["git", "clone", "--depth", "1", auth_clone_url, target_path], capture_output=True, text=True, timeout=120)
+        res = subprocess.run(
+            git_base_cmd + ["clone", "--depth", "1", auth_clone_url, target_path],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            env=clone_env
+        )
         if res.returncode != 0:
-            err = res.stderr.replace(git_token.strip(), "******") if git_token else res.stderr
-            print(f" [!] Clone failed: {err}\n")
+            raw_err = res.stderr
+            sanitized_err = raw_err
+            if git_token.strip():
+                sanitized_err = sanitized_err.replace(git_token.strip(), "******")
+            err_lower = raw_err.lower()
+            if not git_token and any(kw in err_lower for kw in ["could not read username", "terminal prompts disabled", "authentication failed", "repository not found"]):
+                print(f" [!] 🔒 Authentication Required: Repository appears to be private.")
+                print(f"     Please provide a GitHub PAT: clone <url> <pat_token>\n")
+            else:
+                print(f" [!] Clone failed: {sanitized_err}\n")
             return
         print(f" [✓] Cloned successfully into {target_path}")
     else:

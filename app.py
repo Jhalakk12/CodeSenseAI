@@ -238,39 +238,65 @@ with st.sidebar:
 
                     sanitized_display_url = github_url.strip()
 
+                    clone_env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
+                    git_base_cmd = ["git", "-c", "credential.helper="]
+
                     if not os.path.exists(target_path):
                         st.info(f"Cloning `{sanitized_display_url}` (shallow clone)...")
                         res = subprocess.run(
-                            ["git", "clone", "--depth", "1", auth_clone_url, target_path],
+                            git_base_cmd + ["clone", "--depth", "1", auth_clone_url, target_path],
                             capture_output=True,
                             text=True,
-                            timeout=120
+                            timeout=120,
+                            env=clone_env
                         )
                         if res.returncode != 0:
-                            sanitized_err = res.stderr
+                            raw_err = res.stderr
+                            sanitized_err = raw_err
                             if is_private and github_token.strip():
                                 sanitized_err = sanitized_err.replace(github_token.strip(), "******")
-                            st.error(f"Git clone failed: {sanitized_err}")
+
+                            err_lower = raw_err.lower()
+                            if not is_private and any(kw in err_lower for kw in ["could not read username", "terminal prompts disabled", "authentication failed", "repository not found"]):
+                                st.error("🔒 **Authentication Required**: This repository appears to be private. Please check the **'🔒 Private Repository Authentication (GitHub PAT)'** checkbox above and provide your GitHub Personal Access Token.")
+                            elif is_private and any(kw in err_lower for kw in ["could not read username", "terminal prompts disabled", "authentication failed", "bad credentials"]):
+                                st.error(f"🔒 **Authentication Failed**: Invalid or expired GitHub Personal Access Token (PAT). Please verify your token has 'repo' / 'read' permissions. (Error: {sanitized_err})")
+                            else:
+                                st.error(f"Git clone failed: {sanitized_err}")
                             st.stop()
                         st.success(f"Successfully cloned `{sanitized_display_url}`.")
                     else:
                         st.info(f"Using cached clone at `{target_path}`. Pulling latest changes...")
-                        pull_res = subprocess.run(["git", "-C", target_path, "pull"], capture_output=True, text=True, timeout=60)
+                        pull_res = subprocess.run(
+                            ["git", "-C", target_path, "-c", "credential.helper=", "pull"],
+                            capture_output=True,
+                            text=True,
+                            timeout=60,
+                            env=clone_env
+                        )
                         if pull_res.returncode != 0:
                             # Re-clone cleanly if cached pull fails (e.g. auth update or diverged history)
                             import shutil
                             shutil.rmtree(target_path, ignore_errors=True)
                             re_res = subprocess.run(
-                                ["git", "clone", "--depth", "1", auth_clone_url, target_path],
+                                git_base_cmd + ["clone", "--depth", "1", auth_clone_url, target_path],
                                 capture_output=True,
                                 text=True,
-                                timeout=120
+                                timeout=120,
+                                env=clone_env
                             )
                             if re_res.returncode != 0:
-                                sanitized_err = re_res.stderr
+                                raw_err = re_res.stderr
+                                sanitized_err = raw_err
                                 if is_private and github_token.strip():
                                     sanitized_err = sanitized_err.replace(github_token.strip(), "******")
-                                st.error(f"Git clone failed: {sanitized_err}")
+                                err_lower = raw_err.lower()
+                                if not is_private and any(kw in err_lower for kw in ["could not read username", "terminal prompts disabled", "authentication failed", "repository not found"]):
+                                    st.error("🔒 **Authentication Required**: This repository appears to be private. Please check the **'🔒 Private Repository Authentication (GitHub PAT)'** checkbox above and provide your GitHub Personal Access Token.")
+                                elif is_private and any(kw in err_lower for kw in ["could not read username", "terminal prompts disabled", "authentication failed", "bad credentials"]):
+                                    st.error(f"🔒 **Authentication Failed**: Invalid or expired GitHub Personal Access Token (PAT). Please verify your token has 'repo' / 'read' permissions. (Error: {sanitized_err})")
+                                else:
+                                    st.error(f"Git clone failed: {sanitized_err}")
                                 st.stop()
 
                 elif repo_option == "Upload Codebase (.ZIP Archive)":
