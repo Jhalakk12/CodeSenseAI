@@ -805,12 +805,11 @@ with tab_graph:
         repo_scope = st.radio(
             "📁 Analysis Repository Scope",
             [
-                f"📥 Currently Ingested Repository ({ingested_name})",
-                "🌐 CodeSense AI System Repository (CodeSenseAI Root: 16 modules)",
-                "📂 Custom Local Folder / Repository Path..."
+                f"📥 Currently Ingested Codebase ({ingested_name})",
+                "🌐 CodeSense AI System Repository (CodeSenseAI Root: 16 modules)"
             ],
             index=0,
-            help="Automatically analyzes whatever codebase you selected or uploaded in the left sidebar."
+            help="Analyzes whatever codebase you selected or uploaded in the left sidebar."
         )
 
     with col_mode:
@@ -826,15 +825,8 @@ with tab_graph:
 
     if "Currently Ingested" in repo_scope:
         graph_dir = active_path if (active_path and os.path.exists(active_path)) else os.path.join(os.getcwd(), "sample_repo")
-    elif "CodeSense AI" in repo_scope:
-        graph_dir = os.getcwd()
     else:
-        custom_input_path = st.text_input(
-            "Enter Full Path to Any Local Repository / Directory",
-            value=active_path if (active_path and os.path.exists(active_path)) else os.getcwd(),
-            help="Provide any absolute or relative path to any Python project folder on your computer."
-        )
-        graph_dir = custom_input_path.strip() if (custom_input_path and os.path.exists(custom_input_path.strip())) else os.getcwd()
+        graph_dir = os.getcwd()
 
     try:
         dep_graph = DependencyGraph(graph_dir)
@@ -845,6 +837,8 @@ with tab_graph:
         available_files = []
 
     if dep_graph and available_files:
+        is_large_repo = len(available_files) > 25
+
         # Common controls bar
         ctrl_col1, ctrl_col2, ctrl_col3, ctrl_col4 = st.columns([1.2, 1, 1, 1])
         with ctrl_col1:
@@ -861,9 +855,17 @@ with tab_graph:
             )
             direction_code = "LR" if "LR" in rankdir_opt else "TB"
         with ctrl_col3:
-            show_symbols = st.checkbox("🏷️ Show Functions/Classes", value=True, help="Render class and function lists inside each file box")
+            show_symbols = st.checkbox(
+                "🏷️ Show Functions/Classes",
+                value=(not is_large_repo),
+                help="Render class and function lists inside each file box (compact by default on large repositories)"
+            )
         with ctrl_col4:
-            group_clusters = st.checkbox("📦 Group Directory Clusters", value=True, help="Enclose files within dashed folder subgraph clusters")
+            group_clusters = st.checkbox(
+                "📦 Group Directory Clusters",
+                value=(len(available_files) <= 35),
+                help="Enclose files within dashed folder subgraph clusters (simplified by default on large repositories)"
+            )
 
         if "Whole Repository" in view_mode:
             # Full Project Topology Overview

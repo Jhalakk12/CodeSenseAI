@@ -331,10 +331,15 @@ class DependencyGraph:
                 dot_lines.append(_render_node_stmt(mod, meta))
 
         # Render Directed Edges (A -> B means A imports B)
+        # For large codebases (>25 modules), omit edge labels in macro overview to prevent browser layout freezing
+        include_edge_labels = (len(self.modules) <= 25) or (selected_mod is not None)
+
         for src, targets in self.adj.items():
             for tgt in targets:
                 syms = self.symbol_imports.get((src, tgt), [])
-                lbl = f', label=" {syms[0]}"' if (syms and len(syms) == 1) else (f', label=" {len(syms)} symbols"' if len(syms) > 1 else "")
+                lbl = ""
+                if include_edge_labels and syms:
+                    lbl = f', label=" {syms[0]}"' if len(syms) == 1 else f', label=" {len(syms)} symbols"'
                 
                 if selected_mod and (src == selected_mod or tgt == selected_mod or src in direct_deps):
                     dot_lines.append(f'    "{src}" -> "{tgt}" [color="#f85149", penwidth="2.0"{lbl}];')
