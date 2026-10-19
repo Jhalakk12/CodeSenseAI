@@ -77,8 +77,8 @@ def test_dot_and_mermaid_generation():
 
     assert "digraph CodeSenseTopology" in dot
     assert "bgcolor=\"#0d1117\"" in dot
-    assert "🎯 Target Modified" in dot
-    assert "💥 Direct Impact" in dot
+    assert "Target Modified" in dot
+    assert "Direct Impact" in dot
 
     mermaid = graph.generate_mermaid(selected_file="auth/jwt_handler.py")
     assert mermaid.startswith("graph LR")

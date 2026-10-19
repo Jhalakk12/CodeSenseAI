@@ -290,16 +290,16 @@ class DependencyGraph:
         def _render_node_stmt(mod: str, meta: Dict[str, Any]) -> str:
             node_id = f'"{mod}"'
             if mod == selected_mod:
-                label = _format_node_label(mod, meta, tag="🎯 Target Modified")
+                label = _format_node_label(mod, meta, tag="Target Modified")
                 return f'        {node_id} [label="{label}" fillcolor="#490202" color="#f85149" fontcolor="#ffffff" penwidth="2.5"];'
             elif mod in direct_deps:
-                label = _format_node_label(mod, meta, tag="💥 Direct Impact")
+                label = _format_node_label(mod, meta, tag="Direct Impact")
                 return f'        {node_id} [label="{label}" fillcolor="#3d2200" color="#d29922" fontcolor="#ffd280" penwidth="2.0"];'
             elif mod in transitive_deps:
-                label = _format_node_label(mod, meta, tag="⚠️ Transitive Impact")
+                label = _format_node_label(mod, meta, tag="Transitive Impact")
                 return f'        {node_id} [label="{label}" fillcolor="#2b1900" color="#9e6a03" fontcolor="#e3b341"];'
             elif meta.get("is_test"):
-                label = _format_node_label(mod, meta, tag="🧪 Test Suite")
+                label = _format_node_label(mod, meta, tag="Test Suite")
                 return f'        {node_id} [label="{label}" fillcolor="#0b1b36" color="#388bfd" fontcolor="#79c0ff" style="filled,rounded,dashed"];'
             else:
                 label = _format_node_label(mod, meta)
@@ -334,12 +334,12 @@ class DependencyGraph:
         for src, targets in self.adj.items():
             for tgt in targets:
                 syms = self.symbol_imports.get((src, tgt), [])
-                edge_label = f' [label=" {syms[0]}"]' if (syms and len(syms) == 1) else (f' [label=" {len(syms)} symbols"]' if len(syms) > 1 else "")
+                lbl = f', label=" {syms[0]}"' if (syms and len(syms) == 1) else (f', label=" {len(syms)} symbols"' if len(syms) > 1 else "")
                 
                 if selected_mod and (src == selected_mod or tgt == selected_mod or src in direct_deps):
-                    dot_lines.append(f'    "{src}" -> "{tgt}" [color="#f85149" penwidth="2.0"{edge_label}];')
+                    dot_lines.append(f'    "{src}" -> "{tgt}" [color="#f85149", penwidth="2.0"{lbl}];')
                 else:
-                    dot_lines.append(f'    "{src}" -> "{tgt}" [color="#30363d"{edge_label}];')
+                    dot_lines.append(f'    "{src}" -> "{tgt}" [color="#30363d"{lbl}];')
 
         dot_lines.append("}")
         return "\n".join(dot_lines)
