@@ -19,6 +19,7 @@ if hasattr(sys.stdout, "reconfigure"):
 from dotenv import load_dotenv
 from rag_engine import CodeSenseEngine, check_ollama_status
 from scripts.patch_generator import PatchGenerator, generate_unified_patch
+from scripts.dependency_graph import DependencyGraph
 
 load_dotenv()
 
@@ -43,6 +44,8 @@ Available CLI Commands:
   test <query>        Generate automated pytest test cases
   remediate <file>    Generate unified patch & auto-fix (Sweep.dev pattern)
   rollback <file>     Restore file from .bak backup
+  blast <file>        Analyze AST change blast radius and affected tests
+  topology [dir]      Display module dependency topology and call graph
   engine [provider]   Switch active engine (groq / ollama) or view status
   model <name>        Change active LLM model name
   review              Run automated AI PR Diff quality audit
@@ -200,6 +203,14 @@ def run_interactive(engine: CodeSenseEngine):
                 continue
             execute_rollback(args.strip())
 
+        elif cmd in ["blast", "impact"]:
+            target_f = args if args else "sample_repo/auth/jwt_handler.py"
+            execute_blast_radius(target_f)
+
+        elif cmd in ["topology", "graph"]:
+            scan_d = args if args else "sample_repo"
+            execute_topology(scan_d)
+
         elif cmd == "review":
             print("\n[*] Triggering automated AI PR Diff Reviewer...")
             try:
@@ -333,6 +344,43 @@ def execute_rollback(file_path: str):
         print(f" [!] Rollback failed: {e}\n")
 
 
+def execute_blast_radius(target_file: str, root_dir: str = "."):
+    try:
+        graph = DependencyGraph(root_dir)
+        blast = graph.get_blast_radius(target_file)
+        print("\n" + "=" * 70)
+        print(f"  BLAST RADIUS IMPACT REPORT: {blast['target_file']}")
+        print("=" * 70)
+        print(f"  [+] Risk Level:           {blast['risk_level']}")
+        print(f"  [+] Blast Radius:         {blast['total_affected_count']} / {blast['total_modules']} modules ({blast['impact_percentage']}%)")
+        print(f"  [+] Direct Dependents:    {', '.join(blast['direct_dependents']) if blast['direct_dependents'] else 'None (Leaf Node)'}")
+        if blast['transitive_dependents']:
+            print(f"  [+] Transitive Impact:    {', '.join(blast['transitive_dependents'])}")
+        if blast['affected_tests']:
+            print(f"  [+] Impacted Test Suites: {', '.join(blast['affected_tests'])}")
+        print("=" * 70)
+        print("  DevOps Quality Gate Recommendations:")
+        for rec in blast['recommendations']:
+            print(f"  • {rec}")
+        print("=" * 70 + "\n")
+    except Exception as e:
+        print(f"[!] Blast radius analysis failed: {e}\n")
+
+
+def execute_topology(directory: str = "sample_repo"):
+    try:
+        graph = DependencyGraph(directory)
+        print("\n" + "=" * 70)
+        print(f"  REPOSITORY DEPENDENCY TOPOLOGY ({directory})")
+        print("=" * 70)
+        for mod, targets in graph.adj.items():
+            target_str = ", ".join(targets) if targets else "No internal dependencies"
+            print(f"  • {mod} -> [{target_str}]")
+        print("=" * 70 + "\n")
+    except Exception as e:
+        print(f"[!] Topology analysis failed: {e}\n")
+
+
 def execute_clone_and_index(engine: CodeSenseEngine, git_url: str, git_token: str = ""):
     import subprocess
     repo_name = git_url.rstrip("/").split("/")[-1].replace(".git", "") if git_url else "repo"
@@ -436,6 +484,15 @@ def main():
     p_remed.add_argument("--model", dest="model", default=None, help="Model name (default: qwen/qwen3.8-27b for Groq, qwen2.5:1.5b for Ollama)")
     p_remed.add_argument("--no-failover", action="store_true", help="Disable automatic failover to local Ollama on Groq rate limits")
 
+    # blast subcommand
+    p_blast = subparsers.add_parser("blast", help="Compute AST change blast radius and affected tests")
+    p_blast.add_argument("file", nargs="?", default="sample_repo/auth/jwt_handler.py", help="Target source file")
+    p_blast.add_argument("--dir", default=".", help="Root codebase directory (default: current directory)")
+
+    # topology subcommand
+    p_topo = subparsers.add_parser("topology", help="Display module dependency topology graph")
+    p_topo.add_argument("dir", nargs="?", default="sample_repo", help="Target codebase directory (default: sample_repo)")
+
     # status subcommand
     subparsers.add_parser("status", help="Show vector index statistics")
 
@@ -482,6 +539,10 @@ def main():
     elif args.command == "review":
         from scripts.ai_pr_reviewer import run_ai_review
         run_ai_review()
+    elif args.command == "blast":
+        execute_blast_radius(args.file, root_dir=args.dir)
+    elif args.command == "topology":
+        execute_topology(args.dir)
 
 
 if __name__ == "__main__":
