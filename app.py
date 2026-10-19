@@ -88,6 +88,12 @@ if "patch_data" not in st.session_state:
 if "patch_applied" not in st.session_state:
     st.session_state.patch_applied = False
 
+if "target_path" not in st.session_state:
+    st.session_state.target_path = os.path.join(os.getcwd(), "sample_repo")
+
+if "active_repo_label" not in st.session_state:
+    st.session_state.active_repo_label = "sample_repo"
+
 # Initialize Engine
 import importlib
 import scripts.patch_generator
@@ -278,8 +284,10 @@ with st.sidebar:
 
     github_url = ""
     uploaded_zip = None
+    repo_label = "sample_repo"
     if repo_option == "Custom Local Directory":
         target_path = st.text_input("Directory Absolute Path", value=os.getcwd(), help="Absolute path to any folder on your computer.")
+        repo_label = os.path.basename(target_path.strip()) or "Local Directory"
     elif repo_option == "Clone from GitHub URL":
         github_url = st.text_input(
             "GitHub Repository URL",
@@ -312,6 +320,7 @@ with st.sidebar:
 
         repo_name = github_url.rstrip("/").split("/")[-1].replace(".git", "") if github_url else "repo"
         target_path = os.path.join(os.getcwd(), "cloned_repos", repo_name)
+        repo_label = repo_name
     elif repo_option == "Upload Codebase (.ZIP Archive)":
         uploaded_zip = st.file_uploader(
             "Upload Codebase ZIP Archive",
@@ -321,10 +330,17 @@ with st.sidebar:
         if uploaded_zip is not None:
             zip_stem = os.path.splitext(uploaded_zip.name)[0]
             target_path = os.path.join(os.getcwd(), "uploaded_repos", zip_stem)
+            repo_label = zip_stem
         else:
-            target_path = ""
+            target_path = st.session_state.get("target_path", "")
+            repo_label = st.session_state.get("active_repo_label", "Uploaded ZIP")
     else:
         target_path = os.path.join(os.getcwd(), "sample_repo")
+        repo_label = "sample_repo (Built-in)"
+
+    if target_path and os.path.exists(target_path):
+        st.session_state.target_path = target_path
+        st.session_state.active_repo_label = repo_label
 
     if st.button("🚀 Index / Re-Index Codebase", use_container_width=True, type="primary"):
         with st.spinner("Analyzing codebase and generating ChromaDB vectors..."):
@@ -779,8 +795,9 @@ with tab_graph:
     </div>
     """, unsafe_allow_html=True)
 
-    # Determine active ingested repo name
-    ingested_name = os.path.basename(target_path) if (target_path and os.path.exists(target_path)) else "sample_repo"
+    # Determine active ingested repo name from session state or sidebar
+    active_path = st.session_state.get("target_path") or target_path or os.path.join(os.getcwd(), "sample_repo")
+    ingested_name = st.session_state.get("active_repo_label") or os.path.basename(active_path) or "sample_repo"
 
     col_scope, col_mode = st.columns([1, 1])
 
@@ -793,7 +810,7 @@ with tab_graph:
                 "📂 Custom Local Folder / Repository Path..."
             ],
             index=0,
-            help="Analyze any ingested GitHub repository, uploaded folder, custom local path, or the CodeSense AI system itself."
+            help="Automatically analyzes whatever codebase you selected or uploaded in the left sidebar."
         )
 
     with col_mode:
@@ -808,13 +825,13 @@ with tab_graph:
         )
 
     if "Currently Ingested" in repo_scope:
-        graph_dir = target_path if (target_path and os.path.exists(target_path)) else os.path.join(os.getcwd(), "sample_repo")
+        graph_dir = active_path if (active_path and os.path.exists(active_path)) else os.path.join(os.getcwd(), "sample_repo")
     elif "CodeSense AI" in repo_scope:
         graph_dir = os.getcwd()
     else:
         custom_input_path = st.text_input(
             "Enter Full Path to Any Local Repository / Directory",
-            value=target_path if (target_path and os.path.exists(target_path)) else os.getcwd(),
+            value=active_path if (active_path and os.path.exists(active_path)) else os.getcwd(),
             help="Provide any absolute or relative path to any Python project folder on your computer."
         )
         graph_dir = custom_input_path.strip() if (custom_input_path and os.path.exists(custom_input_path.strip())) else os.getcwd()
