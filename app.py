@@ -779,17 +779,21 @@ with tab_graph:
     </div>
     """, unsafe_allow_html=True)
 
+    # Determine active ingested repo name
+    ingested_name = os.path.basename(target_path) if (target_path and os.path.exists(target_path)) else "sample_repo"
+
     col_scope, col_mode = st.columns([1, 1])
 
     with col_scope:
         repo_scope = st.radio(
             "📁 Analysis Repository Scope",
             [
-                "🌐 Entire Project Architecture (CodeSenseAI Root: 16 modules)",
-                "📦 Target Ingested Microservice (sample_repo)"
+                f"📥 Currently Ingested Repository ({ingested_name})",
+                "🌐 CodeSense AI System Repository (CodeSenseAI Root: 16 modules)",
+                "📂 Custom Local Folder / Repository Path..."
             ],
             index=0,
-            help="Switch between analyzing the entire CodeSenseAI system architecture or isolated target microservices."
+            help="Analyze any ingested GitHub repository, uploaded folder, custom local path, or the CodeSense AI system itself."
         )
 
     with col_mode:
@@ -803,10 +807,17 @@ with tab_graph:
             help="Overview displays the entire project topology; Blast Radius evaluates risk when modifying a specific file."
         )
 
-    if "Entire Project" in repo_scope:
+    if "Currently Ingested" in repo_scope:
+        graph_dir = target_path if (target_path and os.path.exists(target_path)) else os.path.join(os.getcwd(), "sample_repo")
+    elif "CodeSense AI" in repo_scope:
         graph_dir = os.getcwd()
     else:
-        graph_dir = target_path if (target_path and os.path.exists(target_path)) else os.path.join(os.getcwd(), "sample_repo")
+        custom_input_path = st.text_input(
+            "Enter Full Path to Any Local Repository / Directory",
+            value=target_path if (target_path and os.path.exists(target_path)) else os.getcwd(),
+            help="Provide any absolute or relative path to any Python project folder on your computer."
+        )
+        graph_dir = custom_input_path.strip() if (custom_input_path and os.path.exists(custom_input_path.strip())) else os.getcwd()
 
     try:
         dep_graph = DependencyGraph(graph_dir)
