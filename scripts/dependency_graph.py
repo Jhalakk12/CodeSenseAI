@@ -235,19 +235,21 @@ class DependencyGraph:
             "classes": self.modules.get(matched_mod, {}).get("classes", [])
         }
 
-    def generate_dot(self, selected_file: Optional[str] = None) -> str:
+    def generate_dot(
+        self,
+        selected_file: Optional[str] = None,
+        show_symbols: bool = True,
+        group_by_dir: bool = True,
+        rankdir: str = "LR"
+    ) -> str:
         """
         Generates Graphviz DOT syntax formatted for CodeSense AI dark DevOps aesthetics.
-        Colors:
-          - Selected target: #f85149 (Coral Red)
-          - Direct dependents: #d29922 (Amber Gold)
-          - Transitive dependents: #bb8009 (Muted Gold)
-          - Unaffected modules: #1f6feb / #30363d (Navy/Slate)
+        Renders files as rich architectural boxes grouped into directory subgraphs (clusters).
         """
         dot_lines = [
             "digraph CodeSenseTopology {",
-            '    graph [bgcolor="#0d1117" rankdir="LR" nodesep="0.6" ranksep="1.0" fontname="Helvetica"];',
-            '    node [shape="box" style="filled,rounded" fontname="Helvetica" fontsize="11" margin="0.25,0.15" penwidth="1.5"];',
+            f'    graph [bgcolor="#0d1117" rankdir="{rankdir}" nodesep="0.6" ranksep="0.9" fontname="Helvetica" compound="true"];',
+            '    node [shape="box" style="filled,rounded" fontname="Helvetica" fontsize="10" margin="0.2,0.15" penwidth="1.5"];',
             '    edge [color="#58a6ff" arrowsize="0.75" penwidth="1.2" fontname="Helvetica" fontsize="9" fontcolor="#8b949e"];'
         ]
 
@@ -259,63 +261,118 @@ class DependencyGraph:
         direct_deps = set(blast_data["direct_dependents"]) if blast_data else set()
         transitive_deps = set(blast_data["transitive_dependents"]) if blast_data else set()
 
-        # Render Nodes
-        for mod, meta in self.modules.items():
-            node_id = f'"{mod}"'
-            label = os.path.basename(mod)
-            sub = os.path.dirname(mod)
-            display_label = f"{sub}/\\n{label}" if sub else label
+        def _format_node_label(mod: str, meta: Dict[str, Any], tag: str = "") -> str:
+            fname = os.path.basename(mod)
+            lines_count = meta.get("line_count", 0)
+            funcs = meta.get("functions", [])
+            classes = meta.get("classes", [])
 
+            label_lines = [fname]
+            if tag:
+                label_lines.append(f"[{tag}]")
+            label_lines.append(f"({lines_count} lines)")
+
+            if show_symbols and (funcs or classes):
+                label_lines.append("----------------")
+                if classes:
+                    for c in classes[:2]:
+                        label_lines.append(f"class {c}")
+                    if len(classes) > 2:
+                        label_lines.append(f"... +{len(classes)-2} classes")
+                if funcs:
+                    for f in funcs[:3]:
+                        label_lines.append(f"def {f}()")
+                    if len(funcs) > 3:
+                        label_lines.append(f"... +{len(funcs)-3} funcs")
+
+            return "\\n".join(label_lines)
+
+        def _render_node_stmt(mod: str, meta: Dict[str, Any]) -> str:
+            node_id = f'"{mod}"'
             if mod == selected_mod:
-                # Target: Hot Coral Red
-                dot_lines.append(
-                    f'    {node_id} [label="{display_label}\\n(🎯 Target Modified)" fillcolor="#490202" color="#f85149" fontcolor="#ffffff" penwidth="2.5"];'
-                )
+                label = _format_node_label(mod, meta, tag="🎯 Target Modified")
+                return f'        {node_id} [label="{label}" fillcolor="#490202" color="#f85149" fontcolor="#ffffff" penwidth="2.5"];'
             elif mod in direct_deps:
-                # Direct downstream impact: Amber Orange
-                dot_lines.append(
-                    f'    {node_id} [label="{display_label}\\n(💥 Direct Impact)" fillcolor="#3d2200" color="#d29922" fontcolor="#ffd280" penwidth="2.0"];'
-                )
+                label = _format_node_label(mod, meta, tag="💥 Direct Impact")
+                return f'        {node_id} [label="{label}" fillcolor="#3d2200" color="#d29922" fontcolor="#ffd280" penwidth="2.0"];'
             elif mod in transitive_deps:
-                # Transitive downstream impact: Muted Amber
-                dot_lines.append(
-                    f'    {node_id} [label="{display_label}\\n(⚠️ Transitive Impact)" fillcolor="#2b1900" color="#9e6a03" fontcolor="#e3b341"];'
-                )
+                label = _format_node_label(mod, meta, tag="⚠️ Transitive Impact")
+                return f'        {node_id} [label="{label}" fillcolor="#2b1900" color="#9e6a03" fontcolor="#e3b341"];'
             elif meta.get("is_test"):
-                # Test modules: Cyan dashed
-                dot_lines.append(
-                    f'    {node_id} [label="{display_label}\\n(🧪 Test Suite)" fillcolor="#0b1b36" color="#388bfd" fontcolor="#79c0ff" style="filled,rounded,dashed"];'
-                )
+                label = _format_node_label(mod, meta, tag="🧪 Test Suite")
+                return f'        {node_id} [label="{label}" fillcolor="#0b1b36" color="#388bfd" fontcolor="#79c0ff" style="filled,rounded,dashed"];'
             else:
-                # Normal unimpacted module: Slate Blue
-                dot_lines.append(
-                    f'    {node_id} [label="{display_label}" fillcolor="#161b22" color="#30363d" fontcolor="#c9d1d9"];'
-                )
+                label = _format_node_label(mod, meta)
+                return f'        {node_id} [label="{label}" fillcolor="#161b22" color="#30363d" fontcolor="#c9d1d9"];'
+
+        if group_by_dir:
+            # Group modules into folder clusters
+            clusters: Dict[str, List[str]] = {}
+            for mod in self.modules:
+                folder = os.path.dirname(mod)
+                cluster_key = folder if folder else "core"
+                clusters.setdefault(cluster_key, []).append(mod)
+
+            for c_key, mods in clusters.items():
+                c_id = f"cluster_{c_key.replace('/', '_').replace('.', '_').replace('-', '_')}"
+                c_title = f"Package: {c_key}/" if c_key != "core" else "Root Package"
+                dot_lines.append(f'    subgraph "{c_id}" {{')
+                dot_lines.append(f'        label="{c_title}";')
+                dot_lines.append('        style="rounded,dashed";')
+                dot_lines.append('        color="#30363d";')
+                dot_lines.append('        fontcolor="#8b949e";')
+                dot_lines.append('        fontsize="11";')
+                dot_lines.append('        bgcolor="rgba(22, 27, 34, 0.4)";')
+                for m in mods:
+                    dot_lines.append(_render_node_stmt(m, self.modules.get(m, {})))
+                dot_lines.append('    }')
+        else:
+            for mod, meta in self.modules.items():
+                dot_lines.append(_render_node_stmt(mod, meta))
 
         # Render Directed Edges (A -> B means A imports B)
         for src, targets in self.adj.items():
             for tgt in targets:
-                # Highlight edge if it connects into or out of blast radius
+                syms = self.symbol_imports.get((src, tgt), [])
+                edge_label = f' [label=" {syms[0]}"]' if (syms and len(syms) == 1) else (f' [label=" {len(syms)} symbols"]' if len(syms) > 1 else "")
+                
                 if selected_mod and (src == selected_mod or tgt == selected_mod or src in direct_deps):
-                    dot_lines.append(f'    "{src}" -> "{tgt}" [color="#f85149" penwidth="2.0"];')
+                    dot_lines.append(f'    "{src}" -> "{tgt}" [color="#f85149" penwidth="2.0"{edge_label}];')
                 else:
-                    dot_lines.append(f'    "{src}" -> "{tgt}" [color="#30363d"];')
+                    dot_lines.append(f'    "{src}" -> "{tgt}" [color="#30363d"{edge_label}];')
 
         dot_lines.append("}")
         return "\n".join(dot_lines)
 
-    def generate_mermaid(self, selected_file: Optional[str] = None) -> str:
-        """Generates Mermaid flowchart diagram (graph LR) with risk color classes."""
+    def generate_mermaid(self, selected_file: Optional[str] = None, direction: str = "LR") -> str:
+        """Generates Mermaid flowchart diagram with folder subgraphs and risk color classes."""
         blast_data = self.get_blast_radius(selected_file) if selected_file else None
         selected_mod = blast_data["target_file"] if blast_data else None
         direct_deps = set(blast_data["direct_dependents"]) if blast_data else set()
 
-        lines = ["graph LR"]
+        lines = [f"graph {direction}"]
+
+        # Group by folder subgraphs
+        clusters: Dict[str, List[str]] = {}
+        for mod in self.modules:
+            folder = os.path.dirname(mod)
+            cluster_key = folder if folder else "core"
+            clusters.setdefault(cluster_key, []).append(mod)
+
+        for c_key, mods in clusters.items():
+            c_id = f"sub_{c_key.replace('/', '_').replace('.', '_').replace('-', '_')}"
+            lines.append(f'    subgraph {c_id} ["📁 {c_key}/"]')
+            for m in mods:
+                m_id = m.replace("/", "_").replace(".", "_").replace("-", "_")
+                fname = os.path.basename(m)
+                lines.append(f'        {m_id}["📄 {fname}"]')
+            lines.append("    end")
+
         for src, targets in self.adj.items():
             src_clean = src.replace("/", "_").replace(".", "_").replace("-", "_")
             for tgt in targets:
                 tgt_clean = tgt.replace("/", "_").replace(".", "_").replace("-", "_")
-                lines.append(f"    {src_clean}[{os.path.basename(src)}] --> {tgt_clean}[{os.path.basename(tgt)}]")
+                lines.append(f"    {src_clean} --> {tgt_clean}")
 
         lines.append("    classDef default fill:#161b22,stroke:#30363d,stroke-width:1px,color:#c9d1d9;")
         lines.append("    classDef target fill:#490202,stroke:#f85149,stroke-width:3px,color:#ffffff;")

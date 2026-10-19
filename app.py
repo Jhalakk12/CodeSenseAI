@@ -89,6 +89,12 @@ if "patch_applied" not in st.session_state:
     st.session_state.patch_applied = False
 
 # Initialize Engine
+import importlib
+import scripts.patch_generator
+import scripts.dependency_graph
+importlib.reload(scripts.patch_generator)
+importlib.reload(scripts.dependency_graph)
+
 from rag_engine import CodeSenseEngine, check_ollama_status
 from scripts.patch_generator import PatchGenerator, generate_unified_patch
 from scripts.dependency_graph import DependencyGraph
@@ -766,15 +772,42 @@ with tab_remediation:
 with tab_graph:
     st.markdown("""
     <div style="background: rgba(33, 38, 45, 0.85); border: 1px solid #30363d; border-radius: 8px; padding: 14px 18px; margin-bottom: 16px;">
-        <h4 style="margin: 0 0 6px 0; color: #58a6ff;">🕸️ Inter-Module Dependency & Call Graph Visualizer ("Blast Radius")</h4>
+        <h4 style="margin: 0 0 6px 0; color: #58a6ff;">🕸️ Repository Architecture & Dependency Visualizer ("Blast Radius")</h4>
         <p style="margin: 0; font-size: 0.88rem; color: #8b949e; line-height: 1.5;">
-            Static AST analysis maps repository import topologies and computes downstream change impact. Select any module to evaluate affected microservices, calculate the blast radius risk score, and review recommended regression tests before deploying.
+            Static AST analysis maps repository import topologies and computes downstream change impact. Inspect the full repository architectural blueprint (files as component boxes grouped by directory clusters) or select any module to calculate downstream Blast Radius change risk and DevOps quality gates.
         </p>
     </div>
     """, unsafe_allow_html=True)
 
-    graph_dir = target_path if (target_path and os.path.exists(target_path)) else os.path.join(os.getcwd(), "sample_repo")
-    
+    col_scope, col_mode = st.columns([1, 1])
+
+    with col_scope:
+        repo_scope = st.radio(
+            "📁 Analysis Repository Scope",
+            [
+                "🌐 Entire Project Architecture (CodeSenseAI Root: 16 modules)",
+                "📦 Target Ingested Microservice (sample_repo)"
+            ],
+            index=0,
+            help="Switch between analyzing the entire CodeSenseAI system architecture or isolated target microservices."
+        )
+
+    with col_mode:
+        view_mode = st.radio(
+            "🗺️ Visualization View Mode",
+            [
+                "🗺️ Whole Repository Architecture Map (All Files as Boxes)",
+                "🎯 Single File Change Impact ('Blast Radius')"
+            ],
+            index=0,
+            help="Overview displays the entire project topology; Blast Radius evaluates risk when modifying a specific file."
+        )
+
+    if "Entire Project" in repo_scope:
+        graph_dir = os.getcwd()
+    else:
+        graph_dir = target_path if (target_path and os.path.exists(target_path)) else os.path.join(os.getcwd(), "sample_repo")
+
     try:
         dep_graph = DependencyGraph(graph_dir)
         available_files = list(dep_graph.modules.keys())
@@ -784,134 +817,223 @@ with tab_graph:
         available_files = []
 
     if dep_graph and available_files:
-        col_sel_file, col_graph_view = st.columns([1, 1])
-
-        with col_sel_file:
-            # Default to jwt_handler or first file
-            default_g_idx = 0
-            for i, f in enumerate(available_files):
-                if "jwt_handler" in f or "auth" in f:
-                    default_g_idx = i
-                    break
-
-            selected_graph_file = st.selectbox(
-                "📂 Select Target File for Blast Radius Analysis",
-                options=available_files,
-                index=default_g_idx,
-                help="Choose a module to compute which downstream files and tests will be impacted if modified."
-            )
-
-        with col_graph_view:
+        # Common controls bar
+        ctrl_col1, ctrl_col2, ctrl_col3, ctrl_col4 = st.columns([1.2, 1, 1, 1])
+        with ctrl_col1:
             graph_format = st.radio(
-                "Topology Render Engine",
+                "Render Engine",
                 ["⚡ Interactive Graphviz (SVG/DOT)", "📊 Mermaid Flowchart"],
                 horizontal=True
             )
+        with ctrl_col2:
+            rankdir_opt = st.selectbox(
+                "Layout Orientation",
+                ["Left-to-Right (LR)", "Top-to-Bottom (TB)"],
+                index=0
+            )
+            direction_code = "LR" if "LR" in rankdir_opt else "TB"
+        with ctrl_col3:
+            show_symbols = st.checkbox("🏷️ Show Functions/Classes", value=True, help="Render class and function lists inside each file box")
+        with ctrl_col4:
+            group_clusters = st.checkbox("📦 Group Directory Clusters", value=True, help="Enclose files within dashed folder subgraph clusters")
 
-        # Compute Blast Radius
-        blast = dep_graph.get_blast_radius(selected_graph_file)
+        if "Whole Repository" in view_mode:
+            # Full Project Topology Overview
+            all_folders = set(os.path.dirname(m) or "Root" for m in dep_graph.modules)
+            total_edges = sum(len(v) for v in dep_graph.adj.values())
+            test_modules = [m for m, meta in dep_graph.modules.items() if meta.get("is_test")]
 
-        # Risk Color Styling
-        risk_color_map = {
-            "CRITICAL": "#f85149",
-            "HIGH": "#d29922",
-            "MEDIUM": "#e3b341",
-            "LOW": "#3fb950"
-        }
-        risk_bg_map = {
-            "CRITICAL": "rgba(248, 81, 73, 0.15)",
-            "HIGH": "rgba(210, 153, 34, 0.15)",
-            "MEDIUM": "rgba(227, 179, 65, 0.15)",
-            "LOW": "rgba(63, 185, 80, 0.15)"
-        }
-        risk_color = risk_color_map.get(blast["risk_level"], "#58a6ff")
-        risk_bg = risk_bg_map.get(blast["risk_level"], "rgba(88, 166, 255, 0.15)")
-
-        # Metric Badges Bar
-        m1, m2, m3, m4 = st.columns(4)
-        with m1:
-            st.markdown(f"""
-            <div style="background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 12px; text-align: center;">
-                <div style="font-size: 0.75rem; color: #8b949e; text-transform: uppercase;">💥 Blast Radius</div>
-                <div style="font-size: 1.25rem; font-weight: 700; color: #58a6ff;">{blast['total_affected_count']} <span style="font-size: 0.85rem; font-weight: 400; color: #8b949e;">/ {blast['total_modules']}</span></div>
-                <div style="font-size: 0.75rem; color: #8b949e;">{blast['impact_percentage']}% of codebase</div>
-            </div>
-            """, unsafe_allow_html=True)
-
-        with m2:
-            st.markdown(f"""
-            <div style="background: {risk_bg}; border: 1px solid {risk_color}; border-radius: 6px; padding: 12px; text-align: center;">
-                <div style="font-size: 0.75rem; color: {risk_color}; text-transform: uppercase;">⚠️ Change Risk Level</div>
-                <div style="font-size: 1.25rem; font-weight: 700; color: {risk_color};">{blast['risk_level']}</div>
-                <div style="font-size: 0.75rem; color: #8b949e;">Automated Evaluation</div>
-            </div>
-            """, unsafe_allow_html=True)
-
-        with m3:
-            st.markdown(f"""
-            <div style="background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 12px; text-align: center;">
-                <div style="font-size: 0.75rem; color: #8b949e; text-transform: uppercase;">🔗 Direct Callers</div>
-                <div style="font-size: 1.25rem; font-weight: 700; color: #d29922;">{len(blast['direct_dependents'])}</div>
-                <div style="font-size: 0.75rem; color: #8b949e;">Immediate dependents</div>
-            </div>
-            """, unsafe_allow_html=True)
-
-        with m4:
-            st.markdown(f"""
-            <div style="background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 12px; text-align: center;">
-                <div style="font-size: 0.75rem; color: #8b949e; text-transform: uppercase;">🧪 Affected Tests</div>
-                <div style="font-size: 1.25rem; font-weight: 700; color: #3fb950;">{len(blast['affected_tests'])}</div>
-                <div style="font-size: 0.75rem; color: #8b949e;">Must pass in CI</div>
-            </div>
-            """, unsafe_allow_html=True)
-
-        st.markdown("<br>", unsafe_allow_html=True)
-
-        # Render Topology Graph
-        st.subheader("🌐 Visual Architecture & Blast Radius Map")
-        st.caption("Color Legend: 🔴 **Selected Target** | 🟠 **Directly Impacted Downstream** | 🟡 **Transitively Affected** | 🔵 **Unaffected Modules**")
-
-        if "Graphviz" in graph_format:
-            dot_code = dep_graph.generate_dot(selected_graph_file)
-            st.graphviz_chart(dot_code, use_container_width=True)
-        else:
-            mermaid_code = dep_graph.generate_mermaid(selected_graph_file)
-            st.markdown(f"```mermaid\n{mermaid_code}\n```")
-
-        # Breakdown Cards
-        st.markdown("---")
-        b_col1, b_col2 = st.columns(2)
-
-        with b_col1:
-            st.markdown("#### 💥 Impacted Downstream Modules")
-            if blast["all_affected"]:
-                for dep in blast["all_affected"]:
-                    is_direct = dep in blast["direct_dependents"]
-                    tag = "Direct Caller" if is_direct else "Transitive Reachable"
-                    tag_color = "#d29922" if is_direct else "#e3b341"
-                    st.markdown(f"""
-                    <div style="background: #161b22; border-left: 3px solid {tag_color}; padding: 8px 12px; margin-bottom: 6px; border-radius: 4px; font-size: 0.85rem;">
-                        <b><code>{dep}</code></b> <span style="font-size: 0.75rem; color: {tag_color};">({tag})</span>
-                    </div>
-                    """, unsafe_allow_html=True)
-            else:
-                st.info("No other modules depend on this file (Leaf node). Safe to refactor with isolated risk.")
-
-        with b_col2:
-            st.markdown("#### 🛡️ DevOps Quality Gate & Recommendations")
-            for rec in blast["recommendations"]:
+            m1, m2, m3, m4 = st.columns(4)
+            with m1:
                 st.markdown(f"""
-                <div style="background: rgba(56, 139, 253, 0.08); border-left: 3px solid #58a6ff; padding: 8px 12px; margin-bottom: 6px; border-radius: 4px; font-size: 0.85rem; color: #c9d1d9;">
-                    {rec}
+                <div style="background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 12px; text-align: center;">
+                    <div style="font-size: 0.75rem; color: #8b949e; text-transform: uppercase;">📄 Total Files / Modules</div>
+                    <div style="font-size: 1.25rem; font-weight: 700; color: #58a6ff;">{len(dep_graph.modules)}</div>
+                    <div style="font-size: 0.75rem; color: #8b949e;">Python source files</div>
+                </div>
+                """, unsafe_allow_html=True)
+            with m2:
+                st.markdown(f"""
+                <div style="background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 12px; text-align: center;">
+                    <div style="font-size: 0.75rem; color: #8b949e; text-transform: uppercase;">📁 Subsystems / Folders</div>
+                    <div style="font-size: 1.25rem; font-weight: 700; color: #3fb950;">{len(all_folders)}</div>
+                    <div style="font-size: 0.75rem; color: #8b949e;">Directory packages</div>
+                </div>
+                """, unsafe_allow_html=True)
+            with m3:
+                st.markdown(f"""
+                <div style="background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 12px; text-align: center;">
+                    <div style="font-size: 0.75rem; color: #8b949e; text-transform: uppercase;">🔗 Inter-Module Imports</div>
+                    <div style="font-size: 1.25rem; font-weight: 700; color: #d29922;">{total_edges}</div>
+                    <div style="font-size: 0.75rem; color: #8b949e;">Architectural connections</div>
+                </div>
+                """, unsafe_allow_html=True)
+            with m4:
+                st.markdown(f"""
+                <div style="background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 12px; text-align: center;">
+                    <div style="font-size: 0.75rem; color: #8b949e; text-transform: uppercase;">🧪 Test Suites</div>
+                    <div style="font-size: 1.25rem; font-weight: 700; color: #79c0ff;">{len(test_modules)}</div>
+                    <div style="font-size: 0.75rem; color: #8b949e;">Automated test files</div>
                 </div>
                 """, unsafe_allow_html=True)
 
-            if blast["functions"] or blast["classes"]:
-                with st.expander(f"🔍 Symbols Defined in `{os.path.basename(selected_graph_file)}`"):
-                    if blast["classes"]:
-                        st.markdown(f"**Classes:** {', '.join([f'`{c}`' for c in blast['classes']])}")
-                    if blast["functions"]:
-                        st.markdown(f"**Functions:** {', '.join([f'`{f}()`' for f in blast['functions']])}")
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.subheader("🌐 Visual Architecture Blueprint")
+            st.caption("Each file is represented as an architectural box grouped into its directory package. Arrows denote module imports.")
+
+            if "Graphviz" in graph_format:
+                dot_code = dep_graph.generate_dot(
+                    selected_file=None,
+                    show_symbols=show_symbols,
+                    group_by_dir=group_clusters,
+                    rankdir=direction_code
+                )
+                st.graphviz_chart(dot_code, use_container_width=True)
+            else:
+                mermaid_code = dep_graph.generate_mermaid(selected_file=None, direction=direction_code)
+                st.markdown(f"```mermaid\n{mermaid_code}\n```")
+
+            with st.expander("📋 Repository Module Directory & Symbol Manifest", expanded=False):
+                manifest_data = []
+                for mod, meta in sorted(dep_graph.modules.items()):
+                    folder = os.path.dirname(mod) or "Root"
+                    funcs = ", ".join(meta.get("functions", [])) or "—"
+                    classes = ", ".join(meta.get("classes", [])) or "—"
+                    imports_count = len(dep_graph.adj.get(mod, set()))
+                    callers_count = len(dep_graph.rev_adj.get(mod, set()))
+                    manifest_data.append({
+                        "File": os.path.basename(mod),
+                        "Folder": folder,
+                        "Lines": meta.get("line_count", 0),
+                        "Classes": classes,
+                        "Functions": funcs,
+                        "Imports Out": imports_count,
+                        "Imported By": callers_count
+                    })
+                st.dataframe(manifest_data, use_container_width=True)
+
+        else:
+            # Single File Blast Radius Mode
+            st.markdown("---")
+            col_sel_file, _ = st.columns([2, 1])
+            with col_sel_file:
+                default_g_idx = 0
+                for i, f in enumerate(available_files):
+                    if "jwt_handler" in f or "rag_engine" in f:
+                        default_g_idx = i
+                        break
+
+                selected_graph_file = st.selectbox(
+                    "📂 Select Target File for Blast Radius Analysis",
+                    options=available_files,
+                    index=default_g_idx,
+                    help="Choose a module to compute which downstream files and tests will be impacted if modified."
+                )
+
+            blast = dep_graph.get_blast_radius(selected_graph_file)
+
+            risk_color_map = {
+                "CRITICAL": "#f85149",
+                "HIGH": "#d29922",
+                "MEDIUM": "#e3b341",
+                "LOW": "#3fb950"
+            }
+            risk_bg_map = {
+                "CRITICAL": "rgba(248, 81, 73, 0.15)",
+                "HIGH": "rgba(210, 153, 34, 0.15)",
+                "MEDIUM": "rgba(227, 179, 65, 0.15)",
+                "LOW": "rgba(63, 185, 80, 0.15)"
+            }
+            risk_color = risk_color_map.get(blast["risk_level"], "#58a6ff")
+            risk_bg = risk_bg_map.get(blast["risk_level"], "rgba(88, 166, 255, 0.15)")
+
+            m1, m2, m3, m4 = st.columns(4)
+            with m1:
+                st.markdown(f"""
+                <div style="background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 12px; text-align: center;">
+                    <div style="font-size: 0.75rem; color: #8b949e; text-transform: uppercase;">💥 Blast Radius</div>
+                    <div style="font-size: 1.25rem; font-weight: 700; color: #58a6ff;">{blast['total_affected_count']} <span style="font-size: 0.85rem; font-weight: 400; color: #8b949e;">/ {blast['total_modules']}</span></div>
+                    <div style="font-size: 0.75rem; color: #8b949e;">{blast['impact_percentage']}% of codebase</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            with m2:
+                st.markdown(f"""
+                <div style="background: {risk_bg}; border: 1px solid {risk_color}; border-radius: 6px; padding: 12px; text-align: center;">
+                    <div style="font-size: 0.75rem; color: {risk_color}; text-transform: uppercase;">⚠️ Change Risk Level</div>
+                    <div style="font-size: 1.25rem; font-weight: 700; color: {risk_color};">{blast['risk_level']}</div>
+                    <div style="font-size: 0.75rem; color: #8b949e;">Automated Evaluation</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            with m3:
+                st.markdown(f"""
+                <div style="background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 12px; text-align: center;">
+                    <div style="font-size: 0.75rem; color: #8b949e; text-transform: uppercase;">🔗 Direct Callers</div>
+                    <div style="font-size: 1.25rem; font-weight: 700; color: #d29922;">{len(blast['direct_dependents'])}</div>
+                    <div style="font-size: 0.75rem; color: #8b949e;">Immediate dependents</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            with m4:
+                st.markdown(f"""
+                <div style="background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 12px; text-align: center;">
+                    <div style="font-size: 0.75rem; color: #8b949e; text-transform: uppercase;">🧪 Affected Tests</div>
+                    <div style="font-size: 1.25rem; font-weight: 700; color: #3fb950;">{len(blast['affected_tests'])}</div>
+                    <div style="font-size: 0.75rem; color: #8b949e;">Must pass in CI</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.subheader("🌐 Visual Blast Radius Impact Map")
+            st.caption("Color Legend: 🔴 **Selected Target** | 🟠 **Directly Impacted Downstream** | 🟡 **Transitively Affected** | 🔵 **Unaffected Modules**")
+
+            if "Graphviz" in graph_format:
+                dot_code = dep_graph.generate_dot(
+                    selected_file=selected_graph_file,
+                    show_symbols=show_symbols,
+                    group_by_dir=group_clusters,
+                    rankdir=direction_code
+                )
+                st.graphviz_chart(dot_code, use_container_width=True)
+            else:
+                mermaid_code = dep_graph.generate_mermaid(selected_file=selected_graph_file, direction=direction_code)
+                st.markdown(f"```mermaid\n{mermaid_code}\n```")
+
+            # Breakdown Cards
+            st.markdown("---")
+            b_col1, b_col2 = st.columns(2)
+
+            with b_col1:
+                st.markdown("#### 💥 Impacted Downstream Modules")
+                if blast["all_affected"]:
+                    for dep in blast["all_affected"]:
+                        is_direct = dep in blast["direct_dependents"]
+                        tag = "Direct Caller" if is_direct else "Transitive Reachable"
+                        tag_color = "#d29922" if is_direct else "#e3b341"
+                        st.markdown(f"""
+                        <div style="background: #161b22; border-left: 3px solid {tag_color}; padding: 8px 12px; margin-bottom: 6px; border-radius: 4px; font-size: 0.85rem;">
+                            <b><code>{dep}</code></b> <span style="font-size: 0.75rem; color: {tag_color};">({tag})</span>
+                        </div>
+                        """, unsafe_allow_html=True)
+                else:
+                    st.info("No other modules depend on this file (Leaf node). Safe to refactor with isolated risk.")
+
+            with b_col2:
+                st.markdown("#### 🛡️ DevOps Quality Gate & Recommendations")
+                for rec in blast["recommendations"]:
+                    st.markdown(f"""
+                    <div style="background: rgba(56, 139, 253, 0.08); border-left: 3px solid #58a6ff; padding: 8px 12px; margin-bottom: 6px; border-radius: 4px; font-size: 0.85rem; color: #c9d1d9;">
+                        {rec}
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                if blast["functions"] or blast["classes"]:
+                    with st.expander(f"🔍 Symbols Defined in `{os.path.basename(selected_graph_file)}`"):
+                        if blast["classes"]:
+                            st.markdown(f"**Classes:** {', '.join([f'`{c}`' for c in blast['classes']])}")
+                        if blast["functions"]:
+                            st.markdown(f"**Functions:** {', '.join([f'`{f}()`' for f in blast['functions']])}")
     else:
         st.warning("No Python source files detected in the target directory for AST dependency analysis.")
 
