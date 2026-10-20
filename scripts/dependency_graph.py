@@ -240,11 +240,13 @@ class DependencyGraph:
         selected_file: Optional[str] = None,
         show_symbols: bool = True,
         group_by_dir: bool = True,
-        rankdir: str = "LR"
+        rankdir: str = "LR",
+        focus_subgraph: bool = True
     ) -> str:
         """
         Generates Graphviz DOT syntax formatted for CodeSense AI dark DevOps aesthetics.
-        Renders files as rich architectural boxes grouped into directory subgraphs (clusters).
+        When selected_file is provided and focus_subgraph is True, isolates the focused impact
+        subgraph (target, callers, transitive dependents, and tests), eliminating visual clutter.
         """
         dot_lines = [
             "digraph CodeSenseTopology {",
@@ -260,6 +262,17 @@ class DependencyGraph:
         selected_mod = blast_data["target_file"] if blast_data else None
         direct_deps = set(blast_data["direct_dependents"]) if blast_data else set()
         transitive_deps = set(blast_data["transitive_dependents"]) if blast_data else set()
+        upstream_imports = set(self.adj.get(selected_mod, set())) if selected_mod else set()
+
+        if selected_file and focus_subgraph:
+            relevant_modules = {selected_mod} | direct_deps | transitive_deps | upstream_imports
+            active_modules = [m for m in self.modules if m in relevant_modules]
+            if selected_mod and selected_mod not in active_modules:
+                active_modules.append(selected_mod)
+        else:
+            active_modules = list(self.modules.keys())
+
+        active_set = set(active_modules)
 
         def _format_node_label(mod: str, meta: Dict[str, Any], tag: str = "") -> str:
             fname = os.path.basename(mod)
@@ -289,16 +302,31 @@ class DependencyGraph:
 
         def _render_node_stmt(mod: str, meta: Dict[str, Any]) -> str:
             node_id = f'"{mod}"'
+            is_test = meta.get("is_test", False) or "test" in mod.lower()
+
             if mod == selected_mod:
                 label = _format_node_label(mod, meta, tag="Target Modified")
                 return f'        {node_id} [label="{label}" fillcolor="#490202" color="#f85149" fontcolor="#ffffff" penwidth="2.5"];'
             elif mod in direct_deps:
-                label = _format_node_label(mod, meta, tag="Direct Impact")
-                return f'        {node_id} [label="{label}" fillcolor="#3d2200" color="#d29922" fontcolor="#ffd280" penwidth="2.0"];'
+                tag = "Affected Test (Direct)" if is_test else "Direct Impact"
+                color = "#238636" if is_test else "#d29922"
+                fill = "#042617" if is_test else "#3d2200"
+                font = "#7ee787" if is_test else "#ffd280"
+                style = "filled,rounded,dashed" if is_test else "filled,rounded"
+                label = _format_node_label(mod, meta, tag=tag)
+                return f'        {node_id} [label="{label}" fillcolor="{fill}" color="{color}" fontcolor="{font}" penwidth="2.0" style="{style}"];'
             elif mod in transitive_deps:
-                label = _format_node_label(mod, meta, tag="Transitive Impact")
-                return f'        {node_id} [label="{label}" fillcolor="#2b1900" color="#9e6a03" fontcolor="#e3b341"];'
-            elif meta.get("is_test"):
+                tag = "Affected Test (Transitive)" if is_test else "Transitive Impact"
+                color = "#2ea043" if is_test else "#9e6a03"
+                fill = "#042617" if is_test else "#2b1900"
+                font = "#7ee787" if is_test else "#e3b341"
+                style = "filled,rounded,dashed" if is_test else "filled,rounded"
+                label = _format_node_label(mod, meta, tag=tag)
+                return f'        {node_id} [label="{label}" fillcolor="{fill}" color="{color}" fontcolor="{font}" penwidth="1.6" style="{style}"];'
+            elif mod in upstream_imports:
+                label = _format_node_label(mod, meta, tag="Upstream Dependency")
+                return f'        {node_id} [label="{label}" fillcolor="#0b1b36" color="#388bfd" fontcolor="#79c0ff" penwidth="1.5"];'
+            elif is_test:
                 label = _format_node_label(mod, meta, tag="Test Suite")
                 return f'        {node_id} [label="{label}" fillcolor="#0b1b36" color="#388bfd" fontcolor="#79c0ff" style="filled,rounded,dashed"];'
             else:
@@ -306,9 +334,9 @@ class DependencyGraph:
                 return f'        {node_id} [label="{label}" fillcolor="#161b22" color="#30363d" fontcolor="#c9d1d9"];'
 
         if group_by_dir:
-            # Group modules into folder clusters
+            # Group active modules into folder clusters
             clusters: Dict[str, List[str]] = {}
-            for mod in self.modules:
+            for mod in active_modules:
                 folder = os.path.dirname(mod)
                 cluster_key = folder if folder else "core"
                 clusters.setdefault(cluster_key, []).append(mod)
@@ -327,15 +355,18 @@ class DependencyGraph:
                     dot_lines.append(_render_node_stmt(m, self.modules.get(m, {})))
                 dot_lines.append('    }')
         else:
-            for mod, meta in self.modules.items():
-                dot_lines.append(_render_node_stmt(mod, meta))
+            for mod in active_modules:
+                dot_lines.append(_render_node_stmt(mod, self.modules.get(mod, {})))
 
-        # Render Directed Edges (A -> B means A imports B)
-        # For large codebases (>25 modules), omit edge labels in macro overview to prevent browser layout freezing
-        include_edge_labels = (len(self.modules) <= 25) or (selected_mod is not None)
+        # Render Directed Edges restricted to active nodes
+        include_edge_labels = (len(active_set) <= 25) or (selected_file and focus_subgraph)
 
         for src, targets in self.adj.items():
+            if src not in active_set:
+                continue
             for tgt in targets:
+                if tgt not in active_set:
+                    continue
                 syms = self.symbol_imports.get((src, tgt), [])
                 lbl = ""
                 if include_edge_labels and syms:
@@ -344,22 +375,41 @@ class DependencyGraph:
                 if selected_mod and (src == selected_mod or tgt == selected_mod or src in direct_deps):
                     dot_lines.append(f'    "{src}" -> "{tgt}" [color="#f85149", penwidth="2.0"{lbl}];')
                 else:
-                    dot_lines.append(f'    "{src}" -> "{tgt}" [color="#30363d"{lbl}];')
+                    dot_lines.append(f'    "{src}" -> "{tgt}" [color="#388bfd"{lbl}];')
 
         dot_lines.append("}")
         return "\n".join(dot_lines)
 
-    def generate_mermaid(self, selected_file: Optional[str] = None, direction: str = "LR") -> str:
-        """Generates Mermaid flowchart diagram with folder subgraphs and risk color classes."""
+    def generate_mermaid(
+        self,
+        selected_file: Optional[str] = None,
+        direction: str = "LR",
+        focus_subgraph: bool = True
+    ) -> str:
+        """
+        Generates Mermaid flowchart diagram with folder subgraphs and risk color classes.
+        When selected_file is provided and focus_subgraph is True, isolates the focused impact subgraph.
+        """
         blast_data = self.get_blast_radius(selected_file) if selected_file else None
         selected_mod = blast_data["target_file"] if blast_data else None
         direct_deps = set(blast_data["direct_dependents"]) if blast_data else set()
+        transitive_deps = set(blast_data["transitive_dependents"]) if blast_data else set()
+        upstream_imports = set(self.adj.get(selected_mod, set())) if selected_mod else set()
 
+        if selected_file and focus_subgraph:
+            relevant_modules = {selected_mod} | direct_deps | transitive_deps | upstream_imports
+            active_modules = [m for m in self.modules if m in relevant_modules]
+            if selected_mod and selected_mod not in active_modules:
+                active_modules.append(selected_mod)
+        else:
+            active_modules = list(self.modules.keys())
+
+        active_set = set(active_modules)
         lines = [f"graph {direction}"]
 
         # Group by folder subgraphs
         clusters: Dict[str, List[str]] = {}
-        for mod in self.modules:
+        for mod in active_modules:
             folder = os.path.dirname(mod)
             cluster_key = folder if folder else "core"
             clusters.setdefault(cluster_key, []).append(mod)
@@ -374,14 +424,19 @@ class DependencyGraph:
             lines.append("    end")
 
         for src, targets in self.adj.items():
+            if src not in active_set:
+                continue
             src_clean = src.replace("/", "_").replace(".", "_").replace("-", "_")
             for tgt in targets:
+                if tgt not in active_set:
+                    continue
                 tgt_clean = tgt.replace("/", "_").replace(".", "_").replace("-", "_")
                 lines.append(f"    {src_clean} --> {tgt_clean}")
 
         lines.append("    classDef default fill:#161b22,stroke:#30363d,stroke-width:1px,color:#c9d1d9;")
         lines.append("    classDef target fill:#490202,stroke:#f85149,stroke-width:3px,color:#ffffff;")
         lines.append("    classDef direct fill:#3d2200,stroke:#d29922,stroke-width:2px,color:#ffd280;")
+        lines.append("    classDef transitive fill:#2b1900,stroke:#9e6a03,stroke-width:2px,color:#e3b341;")
 
         if selected_mod:
             s_clean = selected_mod.replace("/", "_").replace(".", "_").replace("-", "_")
@@ -389,5 +444,8 @@ class DependencyGraph:
             for d in direct_deps:
                 d_clean = d.replace("/", "_").replace(".", "_").replace("-", "_")
                 lines.append(f"    class {d_clean} direct;")
+            for t in transitive_deps:
+                t_clean = t.replace("/", "_").replace(".", "_").replace("-", "_")
+                lines.append(f"    class {t_clean} transitive;")
 
         return "\n".join(lines)

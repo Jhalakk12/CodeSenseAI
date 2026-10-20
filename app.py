@@ -816,11 +816,11 @@ with tab_graph:
         view_mode = st.radio(
             "🗺️ Visualization View Mode",
             [
-                "🗺️ Whole Repository Architecture Map (All Files as Boxes)",
-                "🎯 Single File Change Impact ('Blast Radius')"
+                "🎯 Single File Change Impact ('Blast Radius')",
+                "🗺️ Whole Repository Topology Map (Macro Overview)"
             ],
             index=0,
-            help="Overview displays the entire project topology; Blast Radius evaluates risk when modifying a specific file."
+            help="Blast Radius isolates downstream risk and affected CI test suites when modifying a specific file; Macro Overview visualizes the full project module structure."
         )
 
     if "Currently Ingested" in repo_scope:
@@ -855,94 +855,21 @@ with tab_graph:
             )
             direction_code = "LR" if "LR" in rankdir_opt else "TB"
         with ctrl_col3:
+            focus_subgraph = st.checkbox(
+                "🎯 Focus Impact Subgraph",
+                value=True,
+                help="Isolates only the modified file, downstream callers, and test suites. Strips away unrelated modules for instantaneous, distraction-free rendering."
+            )
+        with ctrl_col4:
             show_symbols = st.checkbox(
                 "🏷️ Show Functions/Classes",
                 value=(not is_large_repo),
-                help="Render class and function lists inside each file box (compact by default on large repositories)"
-            )
-        with ctrl_col4:
-            group_clusters = st.checkbox(
-                "📦 Group Directory Clusters",
-                value=(len(available_files) <= 35),
-                help="Enclose files within dashed folder subgraph clusters (simplified by default on large repositories)"
+                help="Render class and function lists inside each file box"
             )
 
-        if "Whole Repository" in view_mode:
-            # Full Project Topology Overview
-            all_folders = set(os.path.dirname(m) or "Root" for m in dep_graph.modules)
-            total_edges = sum(len(v) for v in dep_graph.adj.values())
-            test_modules = [m for m, meta in dep_graph.modules.items() if meta.get("is_test")]
+        group_clusters = True
 
-            m1, m2, m3, m4 = st.columns(4)
-            with m1:
-                st.markdown(f"""
-                <div style="background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 12px; text-align: center;">
-                    <div style="font-size: 0.75rem; color: #8b949e; text-transform: uppercase;">📄 Total Files / Modules</div>
-                    <div style="font-size: 1.25rem; font-weight: 700; color: #58a6ff;">{len(dep_graph.modules)}</div>
-                    <div style="font-size: 0.75rem; color: #8b949e;">Python source files</div>
-                </div>
-                """, unsafe_allow_html=True)
-            with m2:
-                st.markdown(f"""
-                <div style="background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 12px; text-align: center;">
-                    <div style="font-size: 0.75rem; color: #8b949e; text-transform: uppercase;">📁 Subsystems / Folders</div>
-                    <div style="font-size: 1.25rem; font-weight: 700; color: #3fb950;">{len(all_folders)}</div>
-                    <div style="font-size: 0.75rem; color: #8b949e;">Directory packages</div>
-                </div>
-                """, unsafe_allow_html=True)
-            with m3:
-                st.markdown(f"""
-                <div style="background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 12px; text-align: center;">
-                    <div style="font-size: 0.75rem; color: #8b949e; text-transform: uppercase;">🔗 Inter-Module Imports</div>
-                    <div style="font-size: 1.25rem; font-weight: 700; color: #d29922;">{total_edges}</div>
-                    <div style="font-size: 0.75rem; color: #8b949e;">Architectural connections</div>
-                </div>
-                """, unsafe_allow_html=True)
-            with m4:
-                st.markdown(f"""
-                <div style="background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 12px; text-align: center;">
-                    <div style="font-size: 0.75rem; color: #8b949e; text-transform: uppercase;">🧪 Test Suites</div>
-                    <div style="font-size: 1.25rem; font-weight: 700; color: #79c0ff;">{len(test_modules)}</div>
-                    <div style="font-size: 0.75rem; color: #8b949e;">Automated test files</div>
-                </div>
-                """, unsafe_allow_html=True)
-
-            st.markdown("<br>", unsafe_allow_html=True)
-            st.subheader("🌐 Visual Architecture Blueprint")
-            st.caption("Each file is represented as an architectural box grouped into its directory package. Arrows denote module imports.")
-
-            if "Graphviz" in graph_format:
-                dot_code = dep_graph.generate_dot(
-                    selected_file=None,
-                    show_symbols=show_symbols,
-                    group_by_dir=group_clusters,
-                    rankdir=direction_code
-                )
-                st.graphviz_chart(dot_code, use_container_width=True)
-            else:
-                mermaid_code = dep_graph.generate_mermaid(selected_file=None, direction=direction_code)
-                st.markdown(f"```mermaid\n{mermaid_code}\n```")
-
-            with st.expander("📋 Repository Module Directory & Symbol Manifest", expanded=False):
-                manifest_data = []
-                for mod, meta in sorted(dep_graph.modules.items()):
-                    folder = os.path.dirname(mod) or "Root"
-                    funcs = ", ".join(meta.get("functions", [])) or "—"
-                    classes = ", ".join(meta.get("classes", [])) or "—"
-                    imports_count = len(dep_graph.adj.get(mod, set()))
-                    callers_count = len(dep_graph.rev_adj.get(mod, set()))
-                    manifest_data.append({
-                        "File": os.path.basename(mod),
-                        "Folder": folder,
-                        "Lines": meta.get("line_count", 0),
-                        "Classes": classes,
-                        "Functions": funcs,
-                        "Imports Out": imports_count,
-                        "Imported By": callers_count
-                    })
-                st.dataframe(manifest_data, use_container_width=True)
-
-        else:
+        if "Single File" in view_mode:
             # Single File Blast Radius Mode
             st.markdown("---")
             col_sel_file, _ = st.columns([2, 1])
@@ -1015,19 +942,24 @@ with tab_graph:
                 """, unsafe_allow_html=True)
 
             st.markdown("<br>", unsafe_allow_html=True)
-            st.subheader("🌐 Visual Blast Radius Impact Map")
-            st.caption("Color Legend: 🔴 **Selected Target** | 🟠 **Directly Impacted Downstream** | 🟡 **Transitively Affected** | 🔵 **Unaffected Modules**")
+            st.subheader("🌐 Visual Blast Radius Impact Subgraph")
+            st.caption("Color Legend: 🔴 **Target Modified** | 🟠 **Direct Caller** | 🟡 **Transitive Reachable** | 🟢 **Affected Test Suite** | 🔵 **Upstream Dependency**")
 
             if "Graphviz" in graph_format:
                 dot_code = dep_graph.generate_dot(
                     selected_file=selected_graph_file,
                     show_symbols=show_symbols,
                     group_by_dir=group_clusters,
-                    rankdir=direction_code
+                    rankdir=direction_code,
+                    focus_subgraph=focus_subgraph
                 )
                 st.graphviz_chart(dot_code, use_container_width=True)
             else:
-                mermaid_code = dep_graph.generate_mermaid(selected_file=selected_graph_file, direction=direction_code)
+                mermaid_code = dep_graph.generate_mermaid(
+                    selected_file=selected_graph_file,
+                    direction=direction_code,
+                    focus_subgraph=focus_subgraph
+                )
                 st.markdown(f"```mermaid\n{mermaid_code}\n```")
 
             # Breakdown Cards
@@ -1051,6 +983,25 @@ with tab_graph:
 
             with b_col2:
                 st.markdown("#### 🛡️ DevOps Quality Gate & Recommendations")
+                if blast["risk_level"] == "CRITICAL":
+                    st.markdown("""
+                    <div style="background: rgba(248, 81, 73, 0.12); border-left: 3px solid #f85149; padding: 8px 12px; margin-bottom: 8px; border-radius: 4px; font-size: 0.85rem; color: #ff7b72;">
+                        ⛔ <b>CI/CD Gate: CRITICAL RISK</b> — P0 Core Service. Requires senior reviewer signoff and 100% downstream test coverage before merging.
+                    </div>
+                    """, unsafe_allow_html=True)
+                elif blast["risk_level"] == "HIGH":
+                    st.markdown("""
+                    <div style="background: rgba(210, 153, 34, 0.12); border-left: 3px solid #d29922; padding: 8px 12px; margin-bottom: 8px; border-radius: 4px; font-size: 0.85rem; color: #d29922;">
+                        ⚠️ <b>CI/CD Gate: HIGH RISK</b> — Broad downstream reach. Automated CI regression test execution mandatory.
+                    </div>
+                    """, unsafe_allow_html=True)
+                else:
+                    st.markdown("""
+                    <div style="background: rgba(63, 185, 80, 0.12); border-left: 3px solid #3fb950; padding: 8px 12px; margin-bottom: 8px; border-radius: 4px; font-size: 0.85rem; color: #3fb950;">
+                        ✅ <b>CI/CD Gate: LOW RISK</b> — Isolated blast radius. Safe to merge upon standard unit test pass.
+                    </div>
+                    """, unsafe_allow_html=True)
+
                 for rec in blast["recommendations"]:
                     st.markdown(f"""
                     <div style="background: rgba(56, 139, 253, 0.08); border-left: 3px solid #58a6ff; padding: 8px 12px; margin-bottom: 6px; border-radius: 4px; font-size: 0.85rem; color: #c9d1d9;">
@@ -1058,12 +1009,100 @@ with tab_graph:
                     </div>
                     """, unsafe_allow_html=True)
 
+                if blast["affected_tests"]:
+                    pytest_cmd = f"pytest {' '.join(blast['affected_tests'])}"
+                    st.caption("Suggested CI Regression Command:")
+                    st.code(pytest_cmd, language="bash")
+
                 if blast["functions"] or blast["classes"]:
                     with st.expander(f"🔍 Symbols Defined in `{os.path.basename(selected_graph_file)}`"):
                         if blast["classes"]:
                             st.markdown(f"**Classes:** {', '.join([f'`{c}`' for c in blast['classes']])}")
                         if blast["functions"]:
                             st.markdown(f"**Functions:** {', '.join([f'`{f}()`' for f in blast['functions']])}")
+
+        else:
+            # Full Project Topology Overview
+            all_folders = set(os.path.dirname(m) or "Root" for m in dep_graph.modules)
+            total_edges = sum(len(v) for v in dep_graph.adj.values())
+            test_modules = [m for m, meta in dep_graph.modules.items() if meta.get("is_test")]
+
+            if is_large_repo:
+                st.info(f"💡 This repository contains {len(dep_graph.modules)} files. Showing macro overview. For isolated change risk, switch to **Single File Change Impact ('Blast Radius')** mode.")
+
+            m1, m2, m3, m4 = st.columns(4)
+            with m1:
+                st.markdown(f"""
+                <div style="background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 12px; text-align: center;">
+                    <div style="font-size: 0.75rem; color: #8b949e; text-transform: uppercase;">📄 Total Files / Modules</div>
+                    <div style="font-size: 1.25rem; font-weight: 700; color: #58a6ff;">{len(dep_graph.modules)}</div>
+                    <div style="font-size: 0.75rem; color: #8b949e;">Python source files</div>
+                </div>
+                """, unsafe_allow_html=True)
+            with m2:
+                st.markdown(f"""
+                <div style="background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 12px; text-align: center;">
+                    <div style="font-size: 0.75rem; color: #8b949e; text-transform: uppercase;">📁 Subsystems / Folders</div>
+                    <div style="font-size: 1.25rem; font-weight: 700; color: #3fb950;">{len(all_folders)}</div>
+                    <div style="font-size: 0.75rem; color: #8b949e;">Directory packages</div>
+                </div>
+                """, unsafe_allow_html=True)
+            with m3:
+                st.markdown(f"""
+                <div style="background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 12px; text-align: center;">
+                    <div style="font-size: 0.75rem; color: #8b949e; text-transform: uppercase;">🔗 Inter-Module Imports</div>
+                    <div style="font-size: 1.25rem; font-weight: 700; color: #d29922;">{total_edges}</div>
+                    <div style="font-size: 0.75rem; color: #8b949e;">Architectural connections</div>
+                </div>
+                """, unsafe_allow_html=True)
+            with m4:
+                st.markdown(f"""
+                <div style="background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 12px; text-align: center;">
+                    <div style="font-size: 0.75rem; color: #8b949e; text-transform: uppercase;">🧪 Test Suites</div>
+                    <div style="font-size: 1.25rem; font-weight: 700; color: #79c0ff;">{len(test_modules)}</div>
+                    <div style="font-size: 0.75rem; color: #8b949e;">Automated test files</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.subheader("🌐 Visual Architecture Blueprint")
+            st.caption("Each file is represented as an architectural box grouped into its directory package. Arrows denote module imports.")
+
+            if "Graphviz" in graph_format:
+                dot_code = dep_graph.generate_dot(
+                    selected_file=None,
+                    show_symbols=show_symbols,
+                    group_by_dir=(len(available_files) <= 35),
+                    rankdir=direction_code,
+                    focus_subgraph=False
+                )
+                st.graphviz_chart(dot_code, use_container_width=True)
+            else:
+                mermaid_code = dep_graph.generate_mermaid(
+                    selected_file=None,
+                    direction=direction_code,
+                    focus_subgraph=False
+                )
+                st.markdown(f"```mermaid\n{mermaid_code}\n```")
+
+            with st.expander("📋 Repository Module Directory & Symbol Manifest", expanded=False):
+                manifest_data = []
+                for mod, meta in sorted(dep_graph.modules.items()):
+                    folder = os.path.dirname(mod) or "Root"
+                    funcs = ", ".join(meta.get("functions", [])) or "—"
+                    classes = ", ".join(meta.get("classes", [])) or "—"
+                    imports_count = len(dep_graph.adj.get(mod, set()))
+                    callers_count = len(dep_graph.rev_adj.get(mod, set()))
+                    manifest_data.append({
+                        "File": os.path.basename(mod),
+                        "Folder": folder,
+                        "Lines": meta.get("line_count", 0),
+                        "Classes": classes,
+                        "Functions": funcs,
+                        "Imports Out": imports_count,
+                        "Imported By": callers_count
+                    })
+                st.dataframe(manifest_data, use_container_width=True)
     else:
         st.warning("No Python source files detected in the target directory for AST dependency analysis.")
 

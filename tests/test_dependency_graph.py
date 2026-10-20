@@ -73,14 +73,21 @@ def test_cyclic_dependency_resilience():
 def test_dot_and_mermaid_generation():
     """Verify that Graphviz DOT and Mermaid strings contain proper syntax and highlight nodes."""
     graph = DependencyGraph("sample_repo")
-    dot = graph.generate_dot(selected_file="auth/jwt_handler.py")
+    dot = graph.generate_dot(selected_file="auth/jwt_handler.py", focus_subgraph=True)
 
     assert "digraph CodeSenseTopology" in dot
     assert "bgcolor=\"#0d1117\"" in dot
     assert "Target Modified" in dot
     assert "Direct Impact" in dot
+    assert "jwt_handler.py" in dot
+    assert "routes.py" in dot
 
-    mermaid = graph.generate_mermaid(selected_file="auth/jwt_handler.py")
+    # Full macro mode contains all modules
+    dot_full = graph.generate_dot(selected_file="auth/jwt_handler.py", focus_subgraph=False)
+    for mod in graph.modules:
+        assert os.path.basename(mod) in dot_full
+
+    mermaid = graph.generate_mermaid(selected_file="auth/jwt_handler.py", focus_subgraph=True)
     assert mermaid.startswith("graph LR")
     assert "classDef target" in mermaid
 
