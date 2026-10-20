@@ -265,7 +265,20 @@ class DependencyGraph:
         upstream_imports = set(self.adj.get(selected_mod, set())) if selected_mod else set()
 
         if selected_file and focus_subgraph:
-            relevant_modules = {selected_mod} | direct_deps | transitive_deps | upstream_imports
+            def _rank_module(m: str) -> Tuple[int, str]:
+                if "examples/" in m or "sample" in m:
+                    return (2, m)
+                if self.modules.get(m, {}).get("is_test") or "test" in m.lower():
+                    return (1, m)
+                return (0, m)
+
+            # Prioritize direct dependents (callers), direct tests, key transitive, and upstreams
+            direct_callers = sorted([d for d in direct_deps if not self.modules.get(d, {}).get("is_test", False) and "test" not in d.lower()], key=_rank_module)[:8]
+            direct_tests = sorted([d for d in direct_deps if self.modules.get(d, {}).get("is_test", False) or "test" in d.lower()], key=_rank_module)[:4]
+            transitive_callers = sorted([t for t in transitive_deps if not self.modules.get(t, {}).get("is_test", False) and "test" not in t.lower()], key=_rank_module)[:4]
+            upstreams = sorted(list(upstream_imports), key=_rank_module)[:4]
+
+            relevant_modules = {selected_mod} | set(direct_callers) | set(direct_tests) | set(transitive_callers) | set(upstreams)
             active_modules = [m for m in self.modules if m in relevant_modules]
             if selected_mod and selected_mod not in active_modules:
                 active_modules.append(selected_mod)
@@ -397,7 +410,19 @@ class DependencyGraph:
         upstream_imports = set(self.adj.get(selected_mod, set())) if selected_mod else set()
 
         if selected_file and focus_subgraph:
-            relevant_modules = {selected_mod} | direct_deps | transitive_deps | upstream_imports
+            def _rank_module(m: str) -> Tuple[int, str]:
+                if "examples/" in m or "sample" in m:
+                    return (2, m)
+                if self.modules.get(m, {}).get("is_test") or "test" in m.lower():
+                    return (1, m)
+                return (0, m)
+
+            direct_callers = sorted([d for d in direct_deps if not self.modules.get(d, {}).get("is_test", False) and "test" not in d.lower()], key=_rank_module)[:8]
+            direct_tests = sorted([d for d in direct_deps if self.modules.get(d, {}).get("is_test", False) or "test" in d.lower()], key=_rank_module)[:4]
+            transitive_callers = sorted([t for t in transitive_deps if not self.modules.get(t, {}).get("is_test", False) and "test" not in t.lower()], key=_rank_module)[:4]
+            upstreams = sorted(list(upstream_imports), key=_rank_module)[:4]
+
+            relevant_modules = {selected_mod} | set(direct_callers) | set(direct_tests) | set(transitive_callers) | set(upstreams)
             active_modules = [m for m in self.modules if m in relevant_modules]
             if selected_mod and selected_mod not in active_modules:
                 active_modules.append(selected_mod)
