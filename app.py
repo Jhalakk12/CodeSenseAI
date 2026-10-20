@@ -969,15 +969,36 @@ with tab_graph:
             with b_col1:
                 st.markdown("#### 💥 Impacted Downstream Modules")
                 if blast["all_affected"]:
-                    for dep in blast["all_affected"]:
-                        is_direct = dep in blast["direct_dependents"]
-                        tag = "Direct Caller" if is_direct else "Transitive Reachable"
-                        tag_color = "#d29922" if is_direct else "#e3b341"
+                    directs = blast["direct_dependents"]
+                    transit = blast["transitive_dependents"]
+
+                    # Core vs auxiliary (examples/tutorials)
+                    core_directs = [d for d in directs if "examples/" not in d and "tutorial/" not in d]
+                    other_directs = [d for d in directs if d not in core_directs]
+
+                    for dep in (core_directs + other_directs):
                         st.markdown(f"""
-                        <div style="background: #161b22; border-left: 3px solid {tag_color}; padding: 8px 12px; margin-bottom: 6px; border-radius: 4px; font-size: 0.85rem;">
-                            <b><code>{dep}</code></b> <span style="font-size: 0.75rem; color: {tag_color};">({tag})</span>
+                        <div style="background: #161b22; border-left: 3px solid #d29922; padding: 8px 12px; margin-bottom: 6px; border-radius: 4px; font-size: 0.85rem;">
+                            <b><code>{dep}</code></b> <span style="font-size: 0.75rem; color: #d29922;">(Direct Caller)</span>
                         </div>
                         """, unsafe_allow_html=True)
+
+                    core_transit = [t for t in transit if "examples/" not in t and "tutorial/" not in t]
+                    other_transit = [t for t in transit if t not in core_transit]
+                    shown_transit = core_transit[:4] if core_transit else transit[:4]
+
+                    for dep in shown_transit:
+                        st.markdown(f"""
+                        <div style="background: #161b22; border-left: 3px solid #e3b341; padding: 8px 12px; margin-bottom: 6px; border-radius: 4px; font-size: 0.85rem;">
+                            <b><code>{dep}</code></b> <span style="font-size: 0.75rem; color: #e3b341;">(Transitive Reachable)</span>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                    remaining_count = len(transit) - len(shown_transit)
+                    if remaining_count > 0:
+                        with st.expander(f"➕ View all {len(blast['all_affected'])} affected modules (+{remaining_count} more transitive)"):
+                            for dep in (core_transit[4:] + other_transit):
+                                st.markdown(f"• `{dep}`")
                 else:
                     st.info("No other modules depend on this file (Leaf node). Safe to refactor with isolated risk.")
 
@@ -1010,9 +1031,15 @@ with tab_graph:
                     """, unsafe_allow_html=True)
 
                 if blast["affected_tests"]:
-                    pytest_cmd = f"pytest {' '.join(blast['affected_tests'])}"
-                    st.caption("Suggested CI Regression Command:")
+                    direct_tests = blast.get("direct_tests", [])
+                    target_tests = direct_tests if direct_tests else blast["affected_tests"][:3]
+                    pytest_cmd = f"pytest {' '.join(target_tests)}"
+                    st.caption("Suggested CI Regression Command (Direct Suites):")
                     st.code(pytest_cmd, language="bash")
+                    if len(blast["affected_tests"]) > len(target_tests):
+                        with st.expander(f"📋 View full CI test matrix ({len(blast['affected_tests'])} test suites)"):
+                            for t in blast["affected_tests"]:
+                                st.markdown(f"• `{t}`")
 
                 if blast["functions"] or blast["classes"]:
                     with st.expander(f"🔍 Symbols Defined in `{os.path.basename(selected_graph_file)}`"):

@@ -210,14 +210,25 @@ class DependencyGraph:
         affected_tests = [m for m in all_affected if self.modules.get(m, {}).get("is_test", False)]
         impacted_services = [m for m in all_affected if not self.modules.get(m, {}).get("is_test", False)]
 
+        direct_tests = [t for t in affected_tests if t in direct_dependents]
+        transitive_tests = [t for t in affected_tests if t not in direct_dependents]
+
         recommendations = []
-        if affected_tests:
-            recommendations.append(f"Execute regression test suites: {', '.join(affected_tests)}")
+        if direct_tests:
+            recommendations.append(f"Execute direct regression test suites: {', '.join(direct_tests)}")
+            if transitive_tests:
+                recommendations.append(f"+ {len(transitive_tests)} transitive test suites in CI pipeline")
+        elif affected_tests:
+            preview_tests = affected_tests[:3]
+            more_str = f" (+{len(affected_tests)-3} more)" if len(affected_tests) > 3 else ""
+            recommendations.append(f"Execute regression test suites: {', '.join(preview_tests)}{more_str}")
         else:
             recommendations.append(f"No existing test suites directly cover downstream dependents of `{matched_mod}`. Generate tests via CodeSense AI Test Mode.")
 
         if impacted_services:
-            recommendations.append(f"Review contract / API breaking changes in: {', '.join(impacted_services[:3])}")
+            core_services = [s for s in impacted_services if "examples/" not in s and "tutorial/" not in s]
+            preview_services = core_services[:3] if core_services else impacted_services[:3]
+            recommendations.append(f"Review contract / API breaking changes in: {', '.join(preview_services)}")
 
         return {
             "target_file": matched_mod,
@@ -229,6 +240,8 @@ class DependencyGraph:
             "impact_percentage": round(impact_ratio * 100, 1),
             "risk_level": risk_level,
             "affected_tests": affected_tests,
+            "direct_tests": direct_tests,
+            "transitive_tests": transitive_tests,
             "impacted_services": impacted_services,
             "recommendations": recommendations,
             "functions": self.modules.get(matched_mod, {}).get("functions", []),
@@ -371,7 +384,7 @@ class DependencyGraph:
             for mod in active_modules:
                 dot_lines.append(_render_node_stmt(mod, self.modules.get(mod, {})))
 
-        # Render Directed Edges restricted to active nodes
+        # Render Directed Edges restricted to active nodes and semantic impact paths
         include_edge_labels = (len(active_set) <= 25) or (selected_file and focus_subgraph)
 
         for src, targets in self.adj.items():
@@ -384,11 +397,30 @@ class DependencyGraph:
                 lbl = ""
                 if include_edge_labels and syms:
                     lbl = f', label=" {syms[0]}"' if len(syms) == 1 else f', label=" {len(syms)} symbols"'
-                
-                if selected_mod and (src == selected_mod or tgt == selected_mod or src in direct_deps):
+
+                is_direct_caller = (tgt == selected_mod)
+                is_target_import = (src == selected_mod)
+                is_test_edge = (self.modules.get(src, {}).get("is_test", False) or "test" in src.lower()) and (tgt == selected_mod or tgt in direct_deps)
+                is_trans_call = (src in transitive_deps and tgt in direct_deps)
+
+                if selected_file and focus_subgraph:
+                    # In focused mode, filter out incidental cross-edges between third-party modules
+                    if not (is_direct_caller or is_target_import or is_test_edge or is_trans_call):
+                        continue
+
+                # Color-code based on exact semantic role
+                if is_direct_caller:
+                    dot_lines.append(f'    "{src}" -> "{tgt}" [color="#d29922", penwidth="2.2"{lbl}];')
+                elif is_target_import:
+                    dot_lines.append(f'    "{src}" -> "{tgt}" [color="#388bfd", penwidth="1.8"{lbl}];')
+                elif is_test_edge:
+                    dot_lines.append(f'    "{src}" -> "{tgt}" [color="#238636", penwidth="1.8", style="dashed"{lbl}];')
+                elif is_trans_call:
+                    dot_lines.append(f'    "{src}" -> "{tgt}" [color="#8b949e", penwidth="1.2"{lbl}];')
+                elif selected_mod and (src == selected_mod or tgt == selected_mod):
                     dot_lines.append(f'    "{src}" -> "{tgt}" [color="#f85149", penwidth="2.0"{lbl}];')
                 else:
-                    dot_lines.append(f'    "{src}" -> "{tgt}" [color="#388bfd"{lbl}];')
+                    dot_lines.append(f'    "{src}" -> "{tgt}" [color="#30363d"{lbl}];')
 
         dot_lines.append("}")
         return "\n".join(dot_lines)
@@ -451,10 +483,17 @@ class DependencyGraph:
         for src, targets in self.adj.items():
             if src not in active_set:
                 continue
-            src_clean = src.replace("/", "_").replace(".", "_").replace("-", "_")
             for tgt in targets:
                 if tgt not in active_set:
                     continue
+                if selected_file and focus_subgraph:
+                    is_direct_caller = (tgt == selected_mod)
+                    is_target_import = (src == selected_mod)
+                    is_test_edge = (self.modules.get(src, {}).get("is_test", False) or "test" in src.lower()) and (tgt == selected_mod or tgt in direct_deps)
+                    is_trans_call = (src in transitive_deps and tgt in direct_deps)
+                    if not (is_direct_caller or is_target_import or is_test_edge or is_trans_call):
+                        continue
+                src_clean = src.replace("/", "_").replace(".", "_").replace("-", "_")
                 tgt_clean = tgt.replace("/", "_").replace(".", "_").replace("-", "_")
                 lines.append(f"    {src_clean} --> {tgt_clean}")
 
