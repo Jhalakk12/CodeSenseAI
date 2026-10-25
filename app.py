@@ -552,92 +552,97 @@ with tab_chat:
 
     st.markdown("---")
 
-    # Render Chat History
-    for msg in st.session_state.messages:
-        with st.chat_message(msg["role"]):
-            if msg["role"] == "assistant":
-                if msg.get("provider_used"):
-                    st.markdown(f'<div style="display: inline-block; padding: 2px 10px; background: rgba(59, 130, 246, 0.12); border: 1px solid rgba(59, 130, 246, 0.28); border-radius: 12px; font-size: 0.75rem; color: #93c5fd; margin-bottom: 8px;">🤖 <b>Engine:</b> {msg["provider_used"]} | <b>Model:</b> <code>{msg.get("model_used", "")}</code></div>', unsafe_allow_html=True)
-                render_model_output(msg["content"])
-            else:
-                st.markdown(msg["content"])
+    # Chat Container: Guarantees that all messages (history and dynamic queries) render above the input bar
+    chat_container = st.container()
 
-            if "citations" in msg and msg["citations"]:
-                with st.expander(f"🔍 Source Citations ({len(msg['citations'])} code chunks retrieved)"):
-                    for cite in msg["citations"]:
-                        st.markdown(f"""
-                        <div class="citation-box">
-                            <b>📄 Source:</b> <code>{cite['source']}</code> | <b>Relevance:</b> {cite['score']}<br>
-                            <pre style="margin-top: 5px;"><code>{cite['snippet']}</code></pre>
-                        </div>
-                        """, unsafe_allow_html=True)
-
-    # Handle Prompt Submission
+    # Chat Input Bar: Statically anchored at the bottom of the tab interface
     user_query = st.chat_input("Ask a question about the codebase (e.g. 'How is user authentication handled?')...")
 
     # If a quick action button was clicked, trigger it
     if quick_prompt:
         user_query = quick_prompt
 
-    if user_query:
-        if not api_key and provider == "Groq":
-            st.warning("⚠️ Please provide your Groq API Key in the left sidebar to run the inference (or switch to 🔒 Local Ollama for keyless execution).")
-        else:
-            # Check if indexed
-            if not st.session_state.indexed:
-                # Auto-index the sample repo for immediate seamless experience
-                with st.spinner("Auto-indexing repository on first run..."):
-                    stats = engine.index_codebase(target_path)
-                    st.session_state.indexed = True
-                    st.session_state.index_stats = stats
+    with chat_container:
+        # Render Chat History
+        for msg in st.session_state.messages:
+            with st.chat_message(msg["role"]):
+                if msg["role"] == "assistant":
+                    if msg.get("provider_used"):
+                        st.markdown(f'<div style="display: inline-block; padding: 2px 10px; background: rgba(59, 130, 246, 0.12); border: 1px solid rgba(59, 130, 246, 0.28); border-radius: 12px; font-size: 0.75rem; color: #93c5fd; margin-bottom: 8px;">🤖 <b>Engine:</b> {msg["provider_used"]} | <b>Model:</b> <code>{msg.get("model_used", "")}</code></div>', unsafe_allow_html=True)
+                    render_model_output(msg["content"])
+                else:
+                    st.markdown(msg["content"])
 
-            # Display user message
-            st.session_state.messages.append({"role": "user", "content": user_query})
-            with st.chat_message("user"):
-                st.markdown(user_query)
+                if "citations" in msg and msg["citations"]:
+                    with st.expander(f"🔍 Source Citations ({len(msg['citations'])} code chunks retrieved)"):
+                        for cite in msg["citations"]:
+                            st.markdown(f"""
+                            <div class="citation-box">
+                                <b>📄 Source:</b> <code>{cite['source']}</code> | <b>Relevance:</b> {cite['score']}<br>
+                                <pre style="margin-top: 5px;"><code>{cite['snippet']}</code></pre>
+                            </div>
+                            """, unsafe_allow_html=True)
 
-            # Generate response
-            with st.chat_message("assistant"):
-                with st.spinner("Analyzing codebase vectors and generating response..."):
-                    try:
-                        res = engine.query_codebase(
-                            query=user_query,
-                            api_key=api_key if provider == "Groq" else None,
-                            model_name=model_name,
-                            provider=provider,
-                            task_mode=selected_task,
-                            max_tokens=600,
-                            enable_failover=enable_failover
-                        )
-                        
-                        if res.get("failover") and res["failover"].get("triggered"):
-                            st.warning(f"⚠️ **Automatic Local Failover Triggered**:\n{res['failover'].get('reason', '')}")
+        if user_query:
+            if not api_key and provider == "Groq":
+                st.warning("⚠️ Please provide your Groq API Key in the left sidebar to run the inference (or switch to 🔒 Local Ollama for keyless execution).")
+            else:
+                # Check if indexed
+                if not st.session_state.indexed:
+                    # Auto-index the sample repo for immediate seamless experience
+                    with st.spinner("Auto-indexing repository on first run..."):
+                        stats = engine.index_codebase(target_path)
+                        st.session_state.indexed = True
+                        st.session_state.index_stats = stats
 
-                        provider_used_tag = res.get("provider_used", provider)
-                        model_used_tag = res.get("model_used", model_name)
-                        st.markdown(f'<div style="display: inline-block; padding: 2px 10px; background: rgba(59, 130, 246, 0.12); border: 1px solid rgba(59, 130, 246, 0.28); border-radius: 12px; font-size: 0.75rem; color: #93c5fd; margin-bottom: 8px;">🤖 <b>Engine:</b> {provider_used_tag} | <b>Model:</b> <code>{model_used_tag}</code></div>', unsafe_allow_html=True)
+                # Display user message
+                st.session_state.messages.append({"role": "user", "content": user_query})
+                with st.chat_message("user"):
+                    st.markdown(user_query)
 
-                        render_model_output(res["answer"])
-                        
-                        if res["citations"]:
-                            with st.expander(f"🔍 Source Citations ({len(res['citations'])} code chunks retrieved)"):
-                                for cite in res["citations"]:
-                                    st.markdown(f"""
-                                    <div class="citation-box">
-                                        <b>📄 Source:</b> <code>{cite['source']}</code> | <b>Relevance:</b> {cite['score']}<br>
-                                        <pre style="margin-top: 5px;"><code>{cite['snippet']}</code></pre>
-                                    </div>
-                                    """, unsafe_allow_html=True)
+                # Generate response
+                with st.chat_message("assistant"):
+                    with st.spinner("Analyzing codebase vectors and generating response..."):
+                        try:
+                            res = engine.query_codebase(
+                                query=user_query,
+                                api_key=api_key if provider == "Groq" else None,
+                                model_name=model_name,
+                                provider=provider,
+                                task_mode=selected_task,
+                                max_tokens=600,
+                                enable_failover=enable_failover
+                            )
+                            
+                            if res.get("failover") and res["failover"].get("triggered"):
+                                st.warning(f"⚠️ **Automatic Local Failover Triggered**:\n{res['failover'].get('reason', '')}")
 
-                        st.session_state.messages.append({
-                            "role": "assistant",
-                            "content": res["answer"],
-                            "citations": res["citations"],
-                            "provider_used": provider_used_tag,
-                            "model_used": model_used_tag
-                        })
-                    except Exception as e:
-                        st.error(f"Error generating answer: {str(e)}")
+                            provider_used_tag = res.get("provider_used", provider)
+                            model_used_tag = res.get("model_used", model_name)
+                            st.markdown(f'<div style="display: inline-block; padding: 2px 10px; background: rgba(59, 130, 246, 0.12); border: 1px solid rgba(59, 130, 246, 0.28); border-radius: 12px; font-size: 0.75rem; color: #93c5fd; margin-bottom: 8px;">🤖 <b>Engine:</b> {provider_used_tag} | <b>Model:</b> <code>{model_used_tag}</code></div>', unsafe_allow_html=True)
+
+                            render_model_output(res["answer"])
+                            
+                            if res["citations"]:
+                                with st.expander(f"🔍 Source Citations ({len(res['citations'])} code chunks retrieved)"):
+                                    for cite in res["citations"]:
+                                        st.markdown(f"""
+                                        <div class="citation-box">
+                                            <b>📄 Source:</b> <code>{cite['source']}</code> | <b>Relevance:</b> {cite['score']}<br>
+                                            <pre style="margin-top: 5px;"><code>{cite['snippet']}</code></pre>
+                                        </div>
+                                        """, unsafe_allow_html=True)
+
+                            st.session_state.messages.append({
+                                "role": "assistant",
+                                "content": res["answer"],
+                                "citations": res["citations"],
+                                "provider_used": provider_used_tag,
+                                "model_used": model_used_tag
+                            })
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error generating answer: {str(e)}")
 
 
 with tab_remediation:
