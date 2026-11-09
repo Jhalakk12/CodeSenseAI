@@ -173,7 +173,8 @@ class PatchGenerator:
                 provider_used=provider_used,
                 model_used=model_name,
                 patch_diff=patch_diff,
-                status="GENERATED"
+                remediated_code=remediated_code,
+                status="PENDING_APPROVAL"
             )
         except Exception as audit_err:
             print(f"[Patch Audit Warning] Could not persist patch record: {audit_err}")

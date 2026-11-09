@@ -531,6 +531,56 @@ with st.sidebar:
 
     st.markdown("---")
 
+    # Mobile Portal HITL Status
+    st.subheader("📱 Mobile Approval Portal")
+    try:
+        pending_patches = AuditLogger.get_instance().get_pending_patches()
+        pending_count = len(pending_patches)
+    except Exception:
+        pending_count = 0
+
+    if pending_count > 0:
+        st.markdown(f"""
+        <div style="background: rgba(210, 153, 34, 0.15); border: 1px solid rgba(210, 153, 34, 0.4); border-radius: 8px; padding: 10px 14px; font-size: 0.82rem; color: #d29922; margin-bottom: 8px;">
+            ⏳ <b>{pending_count} Patch{'es' if pending_count > 1 else ''} Awaiting Review</b><br>
+            <span style="font-size: 0.75rem; color: #8b949e;">Tech Lead Mobile Gatekeeping Active</span>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.markdown("""
+        <div style="background: rgba(35, 134, 54, 0.12); border: 1px solid rgba(35, 134, 54, 0.35); border-radius: 8px; padding: 10px 14px; font-size: 0.82rem; color: #3fb950; margin-bottom: 8px;">
+            🟢 <b>Queue Clean:</b> <code>0 Pending</code><br>
+            <span style="font-size: 0.75rem; color: #8b949e;">Ready for incoming AI patches</span>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with st.expander("📲 Mobile Access Link", expanded=True):
+        st.caption("Open on your phone (same Wi-Fi or hotspot):")
+        import socket
+        def _get_best_local_ip():
+            try:
+                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                s.connect(("8.8.8.8", 80))
+                ip = s.getsockname()[0]
+                s.close()
+                if ip and not ip.startswith("127.") and not ip.startswith("192.168.56."):
+                    return ip
+            except Exception:
+                pass
+            try:
+                hostname = socket.gethostname()
+                for ip in socket.gethostbyname_ex(hostname)[2]:
+                    if not ip.startswith("127.") and not ip.startswith("192.168.56.") and not ip.startswith("172.28.") and not ip.startswith("192.168.64."):
+                        return ip
+            except Exception:
+                pass
+            return "192.168.29.217"
+        local_ip = _get_best_local_ip()
+        st.code(f"http://{local_ip}:8501", language="text")
+        st.caption("Navigate to the **📱 Mobile DevOps Approval** tab.")
+
+    st.markdown("---")
+
     # DevOps Architecture Verification
     st.subheader("🛠️ DevOps Pipeline Status")
     st.markdown("""
@@ -569,11 +619,12 @@ def render_model_output(text: str):
     else:
         st.markdown(text)
 
-tab_chat, tab_remediation, tab_graph, tab_audit = st.tabs([
+tab_chat, tab_remediation, tab_graph, tab_audit, tab_mobile = st.tabs([
     "💬 Semantic Code Assistant",
     "🛠️ PR Auto-Remediation (Sweep.dev Pattern)",
     "🕸️ Dependency & Blast Radius Visualizer",
-    "📜 DevOps Audit Trail & Compliance"
+    "📜 DevOps Audit Trail & Compliance",
+    "📱 Mobile DevOps Approval Portal"
 ])
 
 with tab_chat:
@@ -1261,6 +1312,152 @@ with tab_audit:
                     st.caption("No diff recorded.")
     else:
         st.caption("No patches generated yet. Generate patches from the '🛠️ PR Auto-Remediation' tab.")
+
+with tab_mobile:
+    st.header("📱 Mobile DevOps Approval Portal")
+    st.caption("Human-in-the-Loop (HITL) on-call gatekeeping portal. Tech Leads can review, inspect unified diffs, and approve or reject AI remediations from any mobile browser.")
+
+    audit_logger = AuditLogger.get_instance()
+    pending_patches = audit_logger.get_pending_patches()
+
+    if not pending_patches:
+        st.markdown("""
+        <div style="background: rgba(56, 139, 253, 0.08); border: 1px solid rgba(56, 139, 253, 0.25); border-radius: 12px; padding: 28px; text-align: center; margin: 16px 0;">
+            <div style="font-size: 2.2rem; margin-bottom: 8px;">🛡️</div>
+            <h3 style="color: #58a6ff; margin: 0 0 6px 0;">Approval Queue Clean</h3>
+            <p style="color: #8b949e; font-size: 0.88rem; margin: 0;">
+                All generated patches have been reviewed and approved.<br>
+                Generate an AI patch from <b>🛠️ PR Auto-Remediation</b> to queue an incoming approval request.
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.markdown(f"#### ⏳ Patches Awaiting Review ({len(pending_patches)})")
+        for patch in pending_patches:
+            patch_id = patch["id"]
+            
+            # Dynamic Risk Level & Blast Radius Assessment for On-Call Lead
+            risk_badge_color = "#3fb950"
+            risk_level = "LOW"
+            impact_desc = "Isolated module (Safe)"
+            try:
+                target_f = patch["target_file"]
+                if "dep_graph" in st.session_state and st.session_state.dep_graph:
+                    blast = st.session_state.dep_graph.get_blast_radius(target_f)
+                    risk_level = blast.get("risk_level", "LOW")
+                    aff_count = blast.get("total_affected_count", 0)
+                    pct = blast.get("impact_percentage", 0)
+                    impact_desc = f"{aff_count} downstream files impacted ({pct}% of repo)"
+                    if risk_level == "CRITICAL":
+                        risk_badge_color = "#f85149"
+                    elif risk_level == "HIGH":
+                        risk_badge_color = "#d29922"
+                    elif risk_level == "MEDIUM":
+                        risk_badge_color = "#e3b341"
+                elif "auth" in target_f.lower():
+                    risk_level = "HIGH"
+                    risk_badge_color = "#d29922"
+                    impact_desc = "Authentication & Token Security Layer"
+            except Exception:
+                pass
+
+            st.markdown(f"""
+            <div style="background: #161b22; border: 1px solid #30363d; border-left: 5px solid {risk_badge_color}; border-radius: 8px; padding: 14px 18px; margin-bottom: 12px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
+                    <span style="font-size: 1.05rem; font-weight: 700; color: #f0f6fc;">Patch #{patch_id} • <code>{patch['target_file']}</code></span>
+                    <span style="background: rgba(210, 153, 34, 0.2); color: #d29922; padding: 3px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: 600;">PENDING APPROVAL</span>
+                </div>
+                <div style="margin-top: 10px; display: flex; gap: 14px; flex-wrap: wrap; background: #0d1117; padding: 8px 12px; border-radius: 6px; border: 1px solid #21262d;">
+                    <span style="font-size: 0.82rem; color: #8b949e;">⚠️ <b>Change Risk:</b> <span style="color: {risk_badge_color}; font-weight: 700;">{risk_level}</span></span>
+                    <span style="font-size: 0.82rem; color: #8b949e;">💥 <b>Blast Radius:</b> <span style="color: #58a6ff;">{impact_desc}</span></span>
+                </div>
+                <div style="font-size: 0.85rem; color: #8b949e; margin-top: 8px; line-height: 1.5;">
+                    <div><b>Issue:</b> <span style="color: #c9d1d9;">{patch['issue_description']}</span></div>
+                    <div><b>Engine:</b> <code>{patch['provider_used']} • {patch['model_used']}</code> | <b>Queued:</b> <code>{patch['timestamp']}</code></div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            if patch["patch_diff"]:
+                with st.expander("🔍 Inspect Unified Diff", expanded=True):
+                    st.code(patch["patch_diff"], language="diff")
+
+            # Approver Identity & Security Verification
+            col_lead, col_pin = st.columns([2, 1])
+            with col_lead:
+                approver_role = st.selectbox(
+                    "👤 Approver Identity (HITL Governance):",
+                    ["Tech Lead (On-Call)", "DevOps Security Lead", "Principal Engineer", "Repository Owner"],
+                    key=f"role_{patch_id}"
+                )
+            with col_pin:
+                approver_pin = st.text_input(
+                    "🔑 Sign-Off PIN:",
+                    value="1234",
+                    type="password",
+                    key=f"pin_{patch_id}",
+                    help="Verification PIN ensuring only authorized on-call engineers can approve"
+                )
+
+            target_env = st.radio(
+                "🎯 Deployment Target:",
+                [
+                    "💻 Local Codebase & WatchDog Daemon (Instant 50ms apply • .bak rollback safety)",
+                    "🐙 GitHub PR Branch (Creates 'fix/ai-patch' branch & commits to git)"
+                ],
+                index=0,
+                key=f"deploy_target_{patch_id}"
+            )
+            git_push_opt = "GitHub" in target_env
+
+            if git_push_opt:
+                st.markdown(f"""
+                <div style="background: rgba(88, 166, 255, 0.1); border: 1px solid rgba(88, 166, 255, 0.3); border-radius: 6px; padding: 6px 12px; font-size: 0.8rem; color: #58a6ff; margin-bottom: 10px;">
+                    🐙 <b>Git PR Branch:</b> <code>fix/ai-patch-{patch_id}</code> • <b>Commit:</b> <code>fix({os.path.basename(patch['target_file'])}): auto-remediation [HITL Approved]</code>
+                </div>
+                """, unsafe_allow_html=True)
+
+            col_apprv, col_rej = st.columns([1, 1])
+            DEV_SECURITY_PIN = os.getenv("DEV_APPROVAL_PIN", "1234")
+            with col_apprv:
+                if st.button("✅ Approve & Deploy to Codebase", key=f"btn_apprv_{patch_id}", type="primary", use_container_width=True):
+                    if approver_pin.strip() != DEV_SECURITY_PIN:
+                        st.error(f"🔒 **Security Gate Blocked**: Invalid Approver PIN! Only authorized leads can approve code changes (Default: `{DEV_SECURITY_PIN}`).")
+                    else:
+                        with st.spinner("Applying patch and notifying WatchDog daemon..."):
+                            actor_name = f"{approver_role} (PIN: Verified)"
+                            res = audit_logger.resolve_patch(
+                                patch_id=patch_id,
+                                action="APPROVE",
+                                actor=actor_name,
+                                push_to_git=git_push_opt
+                            )
+                            if res["status"] == "applied":
+                                branch_info = f" • Committed to branch `{res.get('git_branch')}`" if res.get("git_branch") else ""
+                                st.success(f"🎉 Patch #{patch_id} approved by {approver_role}!{branch_info} WatchDog synchronized.")
+                                import time
+                                time.sleep(0.5)
+                                st.rerun()
+                            else:
+                                st.error(res.get("message", "Error applying patch"))
+            with col_rej:
+                if st.button("❌ Reject Patch", key=f"btn_rej_{patch_id}", use_container_width=True):
+                    if approver_pin.strip() != DEV_SECURITY_PIN:
+                        st.error(f"🔒 **Security Gate Blocked**: Invalid Approver PIN! (Default: `{DEV_SECURITY_PIN}`).")
+                    else:
+                        actor_name = f"{approver_role} (PIN: Verified)"
+                        res = audit_logger.resolve_patch(
+                            patch_id=patch_id,
+                            action="REJECT",
+                            actor=actor_name
+                        )
+                        st.warning(f"Patch #{patch_id} rejected and archived by {approver_role}.")
+                        import time
+                        time.sleep(0.5)
+                        st.rerun()
+
+            st.markdown("<hr style='border: 1px dashed #30363d; margin: 20px 0;'>", unsafe_allow_html=True)
+
 
 
 

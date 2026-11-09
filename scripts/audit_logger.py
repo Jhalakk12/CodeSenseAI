@@ -76,10 +76,17 @@ class AuditLogger:
                 provider_used TEXT,
                 model_used TEXT,
                 patch_diff TEXT,
+                remediated_code TEXT,
                 status TEXT NOT NULL,
                 backup_path TEXT
             );
             """)
+
+            # Auto-migrate table if remediated_code column is missing in existing DB
+            try:
+                cursor.execute("ALTER TABLE patch_history ADD COLUMN remediated_code TEXT;")
+            except Exception:
+                pass
 
             # Fast query indexes for UI dashboards
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_events(timestamp DESC);")
@@ -144,6 +151,7 @@ class AuditLogger:
         provider_used: str,
         model_used: str,
         patch_diff: str,
+        remediated_code: Optional[str] = None,
         status: str = "GENERATED",
         backup_path: Optional[str] = None,
         timestamp: Optional[str] = None
@@ -155,9 +163,9 @@ class AuditLogger:
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                INSERT INTO patch_history (timestamp, target_file, issue_description, provider_used, model_used, patch_diff, status, backup_path)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, (ts, clean_file, issue_description, provider_used, model_used, patch_diff, status, backup_path))
+                INSERT INTO patch_history (timestamp, target_file, issue_description, provider_used, model_used, patch_diff, remediated_code, status, backup_path)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (ts, clean_file, issue_description, provider_used, model_used, patch_diff, remediated_code, status, backup_path))
             patch_id = cursor.lastrowid
             conn.commit()
 
@@ -172,6 +180,131 @@ class AuditLogger:
             timestamp=ts
         )
         return patch_id
+
+    def get_pending_patches(self) -> List[Dict[str, Any]]:
+        """Retrieves all patches awaiting Human-in-the-Loop (HITL) DevOps approval."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM patch_history WHERE status = 'PENDING_APPROVAL' ORDER BY id DESC;")
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_patch_by_id(self, patch_id: int) -> Optional[Dict[str, Any]]:
+        """Retrieves a specific patch record by primary key."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM patch_history WHERE id = ?;", (patch_id,))
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
+    def resolve_patch(
+        self,
+        patch_id: int,
+        action: str = "APPROVE",
+        actor: str = "Mobile DevOps Portal (HITL)",
+        push_to_git: bool = False
+    ) -> Dict[str, Any]:
+        """
+        Resolves a pending AI patch:
+        - APPROVE: Writes remediated code atomically with .bak backup, updates status to APPLIED, logs audit event.
+        - REJECT: Updates status to REJECTED, leaves codebase untouched, logs audit event.
+        """
+        patch = self.get_patch_by_id(patch_id)
+        if not patch:
+            return {"status": "error", "message": f"Patch #{patch_id} not found."}
+
+        target_file = patch["target_file"]
+        if not os.path.isabs(target_file):
+            root_dir = os.path.dirname(os.path.dirname(__file__))
+            if os.path.exists(target_file):
+                target_file = os.path.abspath(target_file)
+            elif os.path.exists(os.path.join(root_dir, "sample_repo", target_file)):
+                target_file = os.path.join(root_dir, "sample_repo", target_file)
+            elif os.path.exists(os.path.join(root_dir, target_file)):
+                target_file = os.path.join(root_dir, target_file)
+            elif os.path.exists(os.path.join(root_dir, "cloned_repos", target_file)):
+                target_file = os.path.join(root_dir, "cloned_repos", target_file)
+            elif os.path.exists(os.path.join(root_dir, "uploaded_repos", target_file)):
+                target_file = os.path.join(root_dir, "uploaded_repos", target_file)
+            else:
+                target_file = os.path.join(root_dir, target_file)
+
+        if action.upper() == "APPROVE":
+            remediated_code = patch.get("remediated_code")
+            if remediated_code is None:
+                return {"status": "error", "message": "Patch does not contain remediated code."}
+
+            backup_path = f"{target_file}.bak"
+            if os.path.exists(target_file):
+                try:
+                    with open(target_file, "r", encoding="utf-8") as src, open(backup_path, "w", encoding="utf-8") as dst:
+                        dst.write(src.read())
+                except Exception as bak_err:
+                    return {"status": "error", "message": f"Could not create backup: {bak_err}"}
+
+            try:
+                os.makedirs(os.path.dirname(os.path.abspath(target_file)), exist_ok=True)
+                with open(target_file, "w", encoding="utf-8") as f:
+                    f.write(remediated_code)
+            except Exception as write_err:
+                return {"status": "error", "message": f"Could not write patch to target file: {write_err}"}
+
+            git_branch_created = None
+            if push_to_git:
+                try:
+                    import subprocess
+                    repo_dir = os.path.dirname(os.path.dirname(__file__))
+                    branch_name = f"fix/ai-patch-{patch_id}"
+                    b_proc = subprocess.run(["git", "-C", repo_dir, "checkout", "-b", branch_name], capture_output=True, text=True, timeout=10)
+                    if b_proc.returncode != 0:
+                        subprocess.run(["git", "-C", repo_dir, "checkout", branch_name], capture_output=True, text=True, timeout=10)
+                    subprocess.run(["git", "-C", repo_dir, "add", target_file], capture_output=True, text=True, timeout=10)
+                    subprocess.run(["git", "-C", repo_dir, "commit", "-m", f"fix({os.path.basename(target_file)}): auto-remediation patch #{patch_id} [Mobile HITL Approved]"], capture_output=True, text=True, timeout=10)
+                    git_branch_created = branch_name
+                except Exception as e:
+                    print(f"Git PR branch creation error: {e}")
+
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("UPDATE patch_history SET status = 'APPLIED', backup_path = ? WHERE id = ?;", (backup_path, patch_id))
+                conn.commit()
+
+            self.log_event(
+                event_category="PATCH_APPLIED",
+                target_file=target_file,
+                details=f"Backup created at: {backup_path}" + (f" | Branch: {git_branch_created}" if git_branch_created else ""),
+                status="SUCCESS",
+                user_action=actor
+            )
+
+            return {
+                "status": "applied",
+                "patch_id": patch_id,
+                "target_file": target_file,
+                "backup_path": backup_path,
+                "git_branch": git_branch_created
+            }
+
+        elif action.upper() == "REJECT":
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("UPDATE patch_history SET status = 'REJECTED' WHERE id = ?;", (patch_id,))
+                conn.commit()
+
+            self.log_event(
+                event_category="PATCH_REJECTED",
+                target_file=target_file,
+                details=f"Patch #{patch_id} rejected via {actor}",
+                status="REJECTED",
+                user_action=actor
+            )
+
+            return {
+                "status": "rejected",
+                "patch_id": patch_id,
+                "target_file": target_file
+            }
+
+        return {"status": "error", "message": f"Unknown action: {action}"}
 
     def update_patch_status(self, patch_id: int, new_status: str):
         """Updates status of a patch record (e.g. APPLIED, ROLLED_BACK)."""
