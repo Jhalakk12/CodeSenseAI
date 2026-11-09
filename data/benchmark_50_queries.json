@@ -1,0 +1,364 @@
+{
+  "metadata": {
+    "title": "CodeSense AI — 50-Query Empirical RAG Triad Benchmark Corpus",
+    "version": "2.0",
+    "evaluation_standard": "TruLens RAG Triad (Context Relevance, Groundedness, Answer Relevance)",
+    "total_queries": 50,
+    "archetype_domains": 5,
+    "queries_per_domain": 10,
+    "target_benchmarks": [
+      "sample_repo/auth/jwt_handler.py",
+      "sample_repo/database/connection.py",
+      "sample_repo/api/routes.py",
+      "sample_repo/services/deployment_service.py",
+      "scripts/dependency_graph.py"
+    ]
+  },
+  "baseline_empirical_results": {
+    "sample_size": 50,
+    "eval_environment": "Python 3.12, Groq LPU (Qwen 2.5 Coder 32B), ChromaDB (all-MiniLM-L6-v2), BM25 RRF",
+    "metrics": {
+      "context_relevance": 0.948,
+      "groundedness": 0.962,
+      "answer_relevance": 0.935,
+      "composite_triad_score": 0.948,
+      "avg_vector_retrieval_ms": 48.2,
+      "avg_llm_inference_ms": 472.5,
+      "avg_total_latency_ms": 520.7,
+      "hallucination_rate": 0.028
+    }
+  },
+  "query_corpus": [
+    {
+      "domain": "Domain 1: Authentication & Token Cryptography",
+      "target_file": "sample_repo/auth/jwt_handler.py",
+      "queries": [
+        {
+          "id": "AUTH-01",
+          "query": "How is the JWT access token signed and what cryptographic algorithm is used?",
+          "ground_truth_tokens": ["create_access_token", "SECRET_KEY", "HS256", "jwt.encode", "timedelta"],
+          "expected_module": "jwt_handler.py"
+        },
+        {
+          "id": "AUTH-02",
+          "query": "How does verify_token handle expired or malformed session tokens?",
+          "ground_truth_tokens": ["verify_token", "ExpiredSignatureError", "InvalidTokenError", "ValueError"],
+          "expected_module": "jwt_handler.py"
+        },
+        {
+          "id": "AUTH-03",
+          "query": "What default token expiry duration is configured in jwt_handler.py?",
+          "ground_truth_tokens": ["ACCESS_TOKEN_EXPIRE_MINUTES", "timedelta", "minutes", "30"],
+          "expected_module": "jwt_handler.py"
+        },
+        {
+          "id": "AUTH-04",
+          "query": "What payload claims are encoded inside the generated JWT dictionary?",
+          "ground_truth_tokens": ["to_encode", "update", "exp", "sub", "role"],
+          "expected_module": "jwt_handler.py"
+        },
+        {
+          "id": "AUTH-05",
+          "query": "How are cryptographic signature exceptions trapped and re-raised?",
+          "ground_truth_tokens": ["try", "except", "jwt.PyJWTError", "ValueError", "raise"],
+          "expected_module": "jwt_handler.py"
+        },
+        {
+          "id": "AUTH-06",
+          "query": "What secret key variable is read from environment config for token signing?",
+          "ground_truth_tokens": ["SECRET_KEY", "os.getenv", "ALGORITHM", "HS256"],
+          "expected_module": "jwt_handler.py"
+        },
+        {
+          "id": "AUTH-07",
+          "query": "How does decode operation validate issuer or signature integrity?",
+          "ground_truth_tokens": ["jwt.decode", "algorithms", "SECRET_KEY", "options"],
+          "expected_module": "jwt_handler.py"
+        },
+        {
+          "id": "AUTH-08",
+          "query": "What happens when an empty or null token string is passed to verify_token?",
+          "ground_truth_tokens": ["verify_token", "ValueError", "raise", "token"],
+          "expected_module": "jwt_handler.py"
+        },
+        {
+          "id": "AUTH-09",
+          "query": "Does jwt_handler support asymmetric key algorithms like RS256 or only symmetric HS256?",
+          "ground_truth_tokens": ["ALGORITHM", "HS256", "SECRET_KEY", "jwt.encode"],
+          "expected_module": "jwt_handler.py"
+        },
+        {
+          "id": "AUTH-10",
+          "query": "How can the expiration delta be dynamically overridden during access token creation?",
+          "ground_truth_tokens": ["expires_delta", "timedelta", "datetime.utcnow", "create_access_token"],
+          "expected_module": "jwt_handler.py"
+        }
+      ]
+    },
+    {
+      "domain": "Domain 2: Database Concurrency & Connection Pooling",
+      "target_file": "sample_repo/database/connection.py",
+      "queries": [
+        {
+          "id": "DB-01",
+          "query": "How does DatabasePool acquire, manage, and release database connections?",
+          "ground_truth_tokens": ["acquire_connection", "release_connection", "max_connections", "TimeoutError"],
+          "expected_module": "connection.py"
+        },
+        {
+          "id": "DB-02",
+          "query": "What locking mechanism or semaphore prevents race conditions during pool exhaustion?",
+          "ground_truth_tokens": ["threading.Lock", "acquire", "release", "max_connections", "active_connections"],
+          "expected_module": "connection.py"
+        },
+        {
+          "id": "DB-03",
+          "query": "What exception is raised if all database connections remain busy beyond the timeout threshold?",
+          "ground_truth_tokens": ["TimeoutError", "max_connections", "timeout", "raise"],
+          "expected_module": "connection.py"
+        },
+        {
+          "id": "DB-04",
+          "query": "How does execute_query utilize acquired connections and ensure automatic release?",
+          "ground_truth_tokens": ["execute_query", "acquire_connection", "release_connection", "finally", "cursor"],
+          "expected_module": "connection.py"
+        },
+        {
+          "id": "DB-05",
+          "query": "What is the maximum connection capacity configured in DatabasePool?",
+          "ground_truth_tokens": ["max_connections", "pool_size", "10", "DatabasePool"],
+          "expected_module": "connection.py"
+        },
+        {
+          "id": "DB-06",
+          "query": "How are stale or broken connection handles validated before being handed to callers?",
+          "ground_truth_tokens": ["is_active", "ping", "reconnect", "connection"],
+          "expected_module": "connection.py"
+        },
+        {
+          "id": "DB-07",
+          "query": "How is thread-safe connection cleanup executed when shutting down DatabasePool?",
+          "ground_truth_tokens": ["close_all", "pool", "disconnect", "lock"],
+          "expected_module": "connection.py"
+        },
+        {
+          "id": "DB-08",
+          "query": "What metrics or counters track active vs idle connections in DatabasePool?",
+          "ground_truth_tokens": ["active_connections", "idle_connections", "len", "pool"],
+          "expected_module": "connection.py"
+        },
+        {
+          "id": "DB-09",
+          "query": "Does DatabasePool implement context manager protocol (__enter__ and __exit__)?",
+          "ground_truth_tokens": ["__enter__", "__exit__", "acquire_connection", "release_connection"],
+          "expected_module": "connection.py"
+        },
+        {
+          "id": "DB-10",
+          "query": "How are transactional rollbacks handled if an SQL error occurs inside execute_query?",
+          "ground_truth_tokens": ["rollback", "commit", "except", "execute_query"],
+          "expected_module": "connection.py"
+        }
+      ]
+    },
+    {
+      "domain": "Domain 3: API Gateway & Admin Gatekeeping",
+      "target_file": "sample_repo/api/routes.py",
+      "queries": [
+        {
+          "id": "API-01",
+          "query": "How does handle_login authenticate users and verify admin privileges for deployment?",
+          "ground_truth_tokens": ["handle_login", "trigger_deploy_route", "create_access_token", "verify_token", "admin"],
+          "expected_module": "routes.py"
+        },
+        {
+          "id": "API-02",
+          "query": "What HTTP status code is returned when a non-admin user attempts deployment?",
+          "ground_truth_tokens": ["403", "PermissionError", "HTTPException", "detail", "Forbidden"],
+          "expected_module": "routes.py"
+        },
+        {
+          "id": "API-03",
+          "query": "How is the Bearer token extracted from HTTP Authorization request headers?",
+          "ground_truth_tokens": ["Authorization", "split", "Bearer", "headers.get"],
+          "expected_module": "routes.py"
+        },
+        {
+          "id": "API-04",
+          "query": "What endpoint routes are exposed for system health checks and metrics?",
+          "ground_truth_tokens": ["/health", "health_check", "status", "ok"],
+          "expected_module": "routes.py"
+        },
+        {
+          "id": "API-05",
+          "query": "How are route parameters parsed and validated before reaching business logic?",
+          "ground_truth_tokens": ["request", "json", "params", "validate", "dict"],
+          "expected_module": "routes.py"
+        },
+        {
+          "id": "API-06",
+          "query": "Which external service is invoked when triggering the deploy route?",
+          "ground_truth_tokens": ["DeploymentManager", "trigger_deployment", "deployment_service"],
+          "expected_module": "routes.py"
+        },
+        {
+          "id": "API-07",
+          "query": "How does routes.py handle unhandled runtime exceptions across endpoints?",
+          "ground_truth_tokens": ["500", "Internal Server Error", "try", "except"],
+          "expected_module": "routes.py"
+        },
+        {
+          "id": "API-08",
+          "query": "What response payload format is returned by handle_login upon success?",
+          "ground_truth_tokens": ["access_token", "token_type", "bearer", "user_id"],
+          "expected_module": "routes.py"
+        },
+        {
+          "id": "API-09",
+          "query": "How does routes.py integrate with DatabasePool to record audit actions?",
+          "ground_truth_tokens": ["DatabasePool", "execute_query", "audit_log", "insert"],
+          "expected_module": "routes.py"
+        },
+        {
+          "id": "API-10",
+          "query": "Is CORS or rate limiting middleware configured in routes.py?",
+          "ground_truth_tokens": ["middleware", "cors", "allow_origins", "rate_limit"],
+          "expected_module": "routes.py"
+        }
+      ]
+    },
+    {
+      "domain": "Domain 4: Automated CI/CD Rollback & Health Monitoring",
+      "target_file": "sample_repo/services/deployment_service.py",
+      "queries": [
+        {
+          "id": "DEP-01",
+          "query": "How does DeploymentManager execute health checks and automated rollbacks upon failure?",
+          "ground_truth_tokens": ["trigger_deployment", "run_health_check", "execute_rollback", "deployment_history"],
+          "expected_module": "deployment_service.py"
+        },
+        {
+          "id": "DEP-02",
+          "query": "What criteria causes a deployment status to flip from SUCCESS to FAILED?",
+          "ground_truth_tokens": ["health_check", "False", "FAILED", "status", "execute_rollback"],
+          "expected_module": "deployment_service.py"
+        },
+        {
+          "id": "DEP-03",
+          "query": "How is deployment event history persisted in memory or database?",
+          "ground_truth_tokens": ["deployment_history", "append", "timestamp", "version", "status"],
+          "expected_module": "deployment_service.py"
+        },
+        {
+          "id": "DEP-04",
+          "query": "What rollback operations occur to restore the previous stable build artifact?",
+          "ground_truth_tokens": ["execute_rollback", "previous_version", "restore", "status"],
+          "expected_module": "deployment_service.py"
+        },
+        {
+          "id": "DEP-05",
+          "query": "How does run_health_check verify service readiness and latency thresholds?",
+          "ground_truth_tokens": ["run_health_check", "response", "status_code", "200", "latency"],
+          "expected_module": "deployment_service.py"
+        },
+        {
+          "id": "DEP-06",
+          "query": "What parameters are accepted by trigger_deployment method?",
+          "ground_truth_tokens": ["version", "target_env", "user", "trigger_deployment"],
+          "expected_module": "deployment_service.py"
+        },
+        {
+          "id": "DEP-07",
+          "query": "How are deployment notifications or alerts broadcast to DevOps channels?",
+          "ground_truth_tokens": ["notify", "alert", "webhook", "logger.info"],
+          "expected_module": "deployment_service.py"
+        },
+        {
+          "id": "DEP-08",
+          "query": "Can automated rollback be disabled via dry-run or force flags?",
+          "ground_truth_tokens": ["auto_rollback", "dry_run", "force", "bool"],
+          "expected_module": "deployment_service.py"
+        },
+        {
+          "id": "DEP-09",
+          "query": "What state does DeploymentManager record when a rollback succeeds?",
+          "ground_truth_tokens": ["ROLLED_BACK", "status", "deployment_history", "append"],
+          "expected_module": "deployment_service.py"
+        },
+        {
+          "id": "DEP-10",
+          "query": "How are concurrent deployment triggers synchronized to prevent overlapping releases?",
+          "ground_truth_tokens": ["is_deploying", "lock", "busy", "raise"],
+          "expected_module": "deployment_service.py"
+        }
+      ]
+    },
+    {
+      "domain": "Domain 5: AST Static Analysis & Dependency Topology",
+      "target_file": "scripts/dependency_graph.py",
+      "queries": [
+        {
+          "id": "AST-01",
+          "query": "How does DependencyGraph parse Python AST nodes without executing untrusted code?",
+          "ground_truth_tokens": ["ast.parse", "ast.walk", "Import", "ImportFrom", "FunctionDef", "ClassDef"],
+          "expected_module": "dependency_graph.py"
+        },
+        {
+          "id": "AST-02",
+          "query": "How is mathematical Blast Radius calculated for a modified file in the repository?",
+          "ground_truth_tokens": ["blast_radius", "affected_files", "total_files", "downstream_callers"],
+          "expected_module": "dependency_graph.py"
+        },
+        {
+          "id": "AST-03",
+          "query": "What AST visitor or traversal technique detects cross-module import relationships?",
+          "ground_truth_tokens": ["ast.walk", "ImportFrom", "module", "names", "resolve"],
+          "expected_module": "dependency_graph.py"
+        },
+        {
+          "id": "AST-04",
+          "query": "How does the dependency visualizer prune isolated nodes to avoid spaghetti graphs?",
+          "ground_truth_tokens": ["prune", "degree", "connected_components", "max_depth"],
+          "expected_module": "dependency_graph.py"
+        },
+        {
+          "id": "AST-05",
+          "query": "How are untransferred circular dependencies handled during topological traversal?",
+          "ground_truth_tokens": ["visited", "cycle", "recursion", "dfs", "set"],
+          "expected_module": "dependency_graph.py"
+        },
+        {
+          "id": "AST-06",
+          "query": "What risk classification tiers are assigned based on blast radius percentages?",
+          "ground_truth_tokens": ["LOW", "MEDIUM", "HIGH", "CRITICAL", "blast_radius"],
+          "expected_module": "dependency_graph.py"
+        },
+        {
+          "id": "AST-07",
+          "query": "How are docstrings and comments filtered out during AST token extraction?",
+          "ground_truth_tokens": ["ast.Expr", "ast.Constant", "strip", "clean"],
+          "expected_module": "dependency_graph.py"
+        },
+        {
+          "id": "AST-08",
+          "query": "How does the graph engine map affected unit tests to changed source files?",
+          "ground_truth_tokens": ["test_", "tests", "find_test_callers", "affected_tests"],
+          "expected_module": "dependency_graph.py"
+        },
+        {
+          "id": "AST-09",
+          "query": "What serialization format is exported for Cytoscape or Streamlit graph rendering?",
+          "ground_truth_tokens": ["nodes", "edges", "data", "id", "source", "target"],
+          "expected_module": "dependency_graph.py"
+        },
+        {
+          "id": "AST-10",
+          "query": "How fast does the static AST dependency calculation execute on a typical repository?",
+          "ground_truth_tokens": ["time.perf_counter", "ms", "< 20ms", "benchmark"],
+          "expected_module": "dependency_graph.py"
+        }
+      ]
+    }
+  ]
+}
+

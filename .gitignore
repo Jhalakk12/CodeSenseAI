@@ -8,8 +8,7 @@ cloned_repos/
 uploaded_repos/
 *.db
 *.sqlite3
-data/
+data/*.db
+data/*.sqlite3
 
 sourcegraph/
-EVALUATION_2_*.md
-docs/
