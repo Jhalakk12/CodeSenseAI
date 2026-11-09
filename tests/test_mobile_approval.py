@@ -6,7 +6,10 @@ and audit actor accountability.
 
 import os
 import tempfile
-import pytest
+try:
+    import pytest
+except ImportError:
+    pass
 from scripts.audit_logger import AuditLogger
 
 

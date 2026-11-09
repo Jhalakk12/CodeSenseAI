@@ -6,7 +6,10 @@ Validates schema creation, event logging, patch auditing, rollback recording, an
 import os
 import tempfile
 import threading
-import pytest
+try:
+    import pytest
+except ImportError:
+    pass
 from scripts.audit_logger import AuditLogger
 
 
