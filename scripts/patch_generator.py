@@ -163,8 +163,24 @@ class PatchGenerator:
         remediated_code = extract_code_block(llm_response)
         patch_diff = generate_unified_patch(original_code, remediated_code, file_path)
 
+        # Log patch to persistent audit history
+        patch_id = None
+        try:
+            from scripts.audit_logger import AuditLogger
+            patch_id = AuditLogger.get_instance().log_patch(
+                target_file=file_path,
+                issue_description=issue_description,
+                provider_used=provider_used,
+                model_used=model_name,
+                patch_diff=patch_diff,
+                status="GENERATED"
+            )
+        except Exception as audit_err:
+            print(f"[Patch Audit Warning] Could not persist patch record: {audit_err}")
+
         return {
             "status": "success",
+            "patch_id": patch_id,
             "file_path": file_path,
             "original_code": original_code,
             "remediated_code": remediated_code,
@@ -190,6 +206,18 @@ class PatchGenerator:
         with open(file_path, "w", encoding="utf-8") as f:
             f.write(remediated_code)
 
+        try:
+            from scripts.audit_logger import AuditLogger
+            AuditLogger.get_instance().log_event(
+                event_category="PATCH_APPLIED",
+                target_file=file_path,
+                details=f"Backup created at: {backup_path if create_backup else 'None'}",
+                status="SUCCESS",
+                user_action="DevOps Manual Approve"
+            )
+        except Exception:
+            pass
+
         return {
             "status": "applied",
             "file_path": file_path,
@@ -209,6 +237,19 @@ class PatchGenerator:
             dst.write(src.read())
 
         os.remove(backup_path)
+
+        try:
+            from scripts.audit_logger import AuditLogger
+            AuditLogger.get_instance().log_event(
+                event_category="PATCH_ROLLED_BACK",
+                target_file=file_path,
+                details="Restored cleanly from .bak backup file",
+                status="SUCCESS",
+                user_action="DevOps Rollback"
+            )
+        except Exception:
+            pass
+
         return {
             "status": "rolled_back",
             "file_path": file_path

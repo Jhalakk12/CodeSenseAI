@@ -6,6 +6,9 @@ chroma_db/
 .pytest_cache/
 cloned_repos/
 uploaded_repos/
+*.db
+*.sqlite3
+data/
 
 sourcegraph/
 EVALUATION_2_*.md

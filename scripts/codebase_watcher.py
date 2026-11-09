@@ -223,9 +223,35 @@ class CodebaseWatcher:
                     event_record["chunks"] = chunks
                     event_record["latency"] = f"{latency}s"
                     print(f"✅ [WatchDog] Auto-reindexed {chunks} chunks for {rel_path} in {latency}s")
+
+                    # Log to persistent SQLite database
+                    try:
+                        from scripts.audit_logger import AuditLogger
+                        AuditLogger.get_instance().log_event(
+                            event_category="WATCHDOG_SYNC",
+                            target_repo=self.watch_dir,
+                            target_file=rel_path,
+                            details=f"Auto-reindexed {chunks} chunks in {latency}s",
+                            status="SUCCESS",
+                            user_action="WatchDog Daemon"
+                        )
+                    except Exception as audit_err:
+                        print(f"[WatchDog Audit Warning] Could not persist event: {audit_err}")
                 except Exception as e:
                     event_record["status"] = f"error: {str(e)}"
                     print(f"❌ [WatchDog] Reindex failed: {e}")
+                    try:
+                        from scripts.audit_logger import AuditLogger
+                        AuditLogger.get_instance().log_event(
+                            event_category="WATCHDOG_SYNC",
+                            target_repo=self.watch_dir,
+                            target_file=rel_path,
+                            details=f"Reindex failed: {str(e)[:100]}",
+                            status="ERROR",
+                            user_action="WatchDog Daemon"
+                        )
+                    except Exception:
+                        pass
 
             # Trigger user-defined callback if provided
             if self.custom_callback:
