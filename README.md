@@ -1,5 +1,4 @@
 # CodeSense AI — Intelligent Codebase Assistant & AI DevOps Pipeline
-**Course:** CSE 4011: Intelligent Developer Tools and AI DevOps Workflows (7th Sem, BMU)
 
 **CodeSense AI** is a developer intelligence platform and AI DevOps pipeline designed to accelerate code comprehension, automate code quality and security reviews, and streamline CI/CD workflows using semantic code retrieval (RAG) and LLM orchestration.
 
@@ -9,7 +8,7 @@
 
 | Layer | Tool / Technology | Purpose |
 | :--- | :--- | :--- |
-| **Code Search (Phase 1)** | **Sourcegraph OSS** (Docker) | Self-hosted structural & regex codebase search (`scripts/run_sourcegraph.bat`) |
+| **Code Search** | **Sourcegraph OSS** (Docker) | Self-hosted structural & regex codebase search (`scripts/run_sourcegraph.bat`) |
 | **AST Chunking & Orchestration** | **LangChain** (`RecursiveCharacterTextSplitter`) | Language-aware code parsing preserving functions and classes |
 | **Vector Database** | **ChromaDB** | In-process persistent dense vector database |
 | **Embedding Model** | **sentence-transformers/all-MiniLM-L6-v2** | Free, local, 384-dimensional Hugging Face embeddings (runs on CPU) |
@@ -134,7 +133,7 @@ podman-compose up --build
 
 ---
 
-### 4. Running Sourcegraph OSS (Phase 1 Code Search)
+### 4. Running Sourcegraph OSS (Code Search Engine)
 * **On Windows:**
   ```cmd
   scripts\run_sourcegraph.bat
@@ -167,11 +166,10 @@ CodeSenseAI/
 │   ├── test_sample_repo.py         # Pytest unit tests for microservice
 │   └── test_ui_selenium.py         # Selenium automated UI browser test
 ├── app.py                          # Streamlit Web Console
+├── cli.py                          # Headless Linux CLI Machine
 ├── rag_engine.py                   # LangChain + ChromaDB RAG engine
 ├── Dockerfile                      # Multi-stage production container
 ├── docker-compose.yml              # Orchestration configuration
-├── PROJECT_CHARTER.md              # Academic Project Charter & A1 Synopsis
-├── DEMO_GUIDE.md                   # Presentation guide & viva Q&A
 ├── requirements.txt                # Python dependencies
 └── README.md
 ```
