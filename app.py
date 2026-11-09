@@ -95,19 +95,18 @@ if "active_repo_label" not in st.session_state:
     st.session_state.active_repo_label = "sample_repo"
 
 # Initialize Engine
-import importlib
-import scripts.patch_generator
-import scripts.dependency_graph
-importlib.reload(scripts.patch_generator)
-importlib.reload(scripts.dependency_graph)
-
 from rag_engine import CodeSenseEngine, check_ollama_status
 from scripts.patch_generator import PatchGenerator, generate_unified_patch
 from scripts.dependency_graph import DependencyGraph
+from scripts.codebase_watcher import CodebaseWatcher
 
 @st.cache_resource
 def get_engine():
     return CodeSenseEngine()
+
+@st.cache_resource
+def get_watchdog_daemon(_engine):
+    return CodebaseWatcher(watch_dir="", engine=_engine, debounce_seconds=1.5)
 
 @st.cache_data(ttl=600)
 def fetch_cached_groq_models(key: str):
@@ -479,6 +478,56 @@ with st.sidebar:
         """, unsafe_allow_html=True)
 
     st.markdown("---")
+    st.subheader("🐕 Real-Time Codebase WatchDog")
+    st.caption("Background daemon that auto-indexes code and updates AST topology in real-time whenever files are saved.")
+
+    watchdog_active = st.toggle(
+        "Activate Live WatchDog Daemon",
+        value=st.session_state.get("watchdog_enabled", True),
+        help="Monitors target directory for file modifications, creations, and deletions."
+    )
+    st.session_state.watchdog_enabled = watchdog_active
+
+    daemon = get_watchdog_daemon(engine)
+    daemon.set_watch_dir(target_path)
+
+    if watchdog_active:
+        if not daemon.is_running:
+            daemon.start()
+        status = daemon.get_status()
+        st.markdown(f"""
+        <div style="background: rgba(35, 134, 54, 0.12); border: 1px solid rgba(35, 134, 54, 0.35); border-radius: 8px; padding: 10px 14px; font-size: 0.82rem; color: #3fb950; margin-bottom: 8px;">
+            ● <b>WatchDog Daemon:</b> <code>ACTIVE</code><br>
+            📂 <b>Watching:</b> <code>{os.path.basename(status['watch_dir']) or 'root'}/</code><br>
+            ⚡ <b>Events Processed:</b> {status['total_events']}<br>
+            🕒 <b>Last Sync:</b> {status['last_sync']}<br>
+            🛡️ <b>Filter:</b> <code>MD5 Fingerprinting</code>
+        </div>
+        """, unsafe_allow_html=True)
+
+        if st.button("⚡ Force Immediate Re-Sync", key="watchdog_force_resync", use_container_width=True, help="Trigger manual re-index across the active watched directory"):
+            with st.spinner("Synchronizing vector index..."):
+                engine.index_codebase(daemon.watch_dir)
+                st.success("Synchronized!")
+                st.rerun()
+
+        if status["recent_events"]:
+            with st.expander("📋 Recent WatchDog Events", expanded=False):
+                for ev in status["recent_events"]:
+                    detail_str = f" • {ev['chunks']} chunks" if "chunks" in ev else ""
+                    if "latency" in ev:
+                        detail_str += f" in {ev['latency']}"
+                    st.markdown(f"• `{ev['timestamp']}` — **{ev['type'].upper()}**: `{ev['file']}` ({ev['status']}{detail_str})")
+    else:
+        if daemon.is_running:
+            daemon.stop()
+        st.markdown("""
+        <div style="background: rgba(110, 118, 129, 0.1); border: 1px solid rgba(110, 118, 129, 0.25); border-radius: 8px; padding: 8px 12px; font-size: 0.8rem; color: #8b949e; margin-bottom: 8px;">
+            ⚪ <b>WatchDog Daemon:</b> <code>STANDBY</code> (Manual Indexing Mode)
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.markdown("---")
 
     # DevOps Architecture Verification
     st.subheader("🛠️ DevOps Pipeline Status")
@@ -488,6 +537,7 @@ with st.sidebar:
         <div>📦 <b>Docker Compose:</b> <span style="color: #3fb950;">Ready</span></div>
         <div>⚙️ <b>CI/CD (GitHub Actions):</b> <span style="color: #3fb950;">Active</span></div>
         <div>📊 <b>Vector Store:</b> <span style="color: #58a6ff;">ChromaDB Persistent</span></div>
+        <div>🐕 <b>WatchDog Daemon:</b> <span style="color: #3fb950;">Live Background Monitor</span></div>
         <div>🌐 <b>Architecture:</b> <span style="color: #58a6ff;">7-Service Topology</span></div>
         <div>🛡️ <b>Guardrails:</b> <span style="color: #3fb950;">Scope & Grounding Active</span></div>
     </div>

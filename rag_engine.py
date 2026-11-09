@@ -5,6 +5,7 @@ Provides language-aware chunking, vector embeddings, and LLM orchestration.
 import os
 import glob
 import json
+import threading
 import urllib.request
 import urllib.error
 from typing import List, Dict, Any, Optional
@@ -90,6 +91,7 @@ class CodeSenseEngine:
         self.embedding_model_name = embedding_model_name
         self._embeddings = None
         self._vector_store = None
+        self._index_lock = threading.Lock()
 
     @property
     def embeddings(self):
@@ -177,19 +179,22 @@ class CodeSenseEngine:
         texts = [d["text"] for d in docs]
         metadatas = [d["metadata"] for d in docs]
 
-        # Reset vector store
-        try:
-            self.vector_store.delete_collection()
-        except Exception:
-            pass
+        # Reset vector store safely with lock to prevent race conditions during rapid re-indexing
+        with self._index_lock:
+            try:
+                if self._vector_store is not None:
+                    self._vector_store.delete_collection()
+            except Exception:
+                pass
+            self._vector_store = None
 
-        self._vector_store = Chroma.from_texts(
-            texts=texts,
-            embedding=self.embeddings,
-            metadatas=metadatas,
-            persist_directory=self.persist_dir,
-            collection_name="codesense_index"
-        )
+            self._vector_store = Chroma.from_texts(
+                texts=texts,
+                embedding=self.embeddings,
+                metadatas=metadatas,
+                persist_directory=self.persist_dir,
+                collection_name="codesense_index"
+            )
 
         return {
             "status": "success",
