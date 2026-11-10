@@ -92,23 +92,31 @@
 
 ## 🌟 Foundational Capabilities
 
-1. **AST-Aware Semantic Code Search (RAG):**
+1. **Multi-Mode Repository Ingestion Pipeline:**
+   * **Built-in Microservice:** Direct one-click indexing of the isolated `sample_repo` microservice.
+   * **Live GitHub URL Cloner:** Shallow Git cloning supporting public repositories and private repositories with Personal Access Token (PAT) authentication and log sanitization.
+   * **ZIP Archive Upload & Custom Local Directories:** Direct ingestion of zip archives and local file system paths with multi-language parsing (`.py`, `.ts`, `.go`, `.java`).
+
+2. **AST-Aware Semantic Code Search (RAG):**
    * Preserves logical code constructs (functions, classes, docstrings) using LangChain `RecursiveCharacterTextSplitter`.
    * Dense vector embeddings with `sentence-transformers/all-MiniLM-L6-v2` (384-dimensional, CPU-optimized).
    * ChromaDB vector storage with exact file and line-number citations.
 
-2. **Dual-LLM Engine with Hot-Standby Failover:**
+3. **Dual-LLM Engine with Hot-Standby Failover:**
    * **Cloud Turbo Mode:** Groq LPU inference (Qwen 2.5 32B, Llama 3.3 70B) at ~500 tokens/sec.
    * **Air-Gapped Privacy Mode:** Local Ollama running **Google Gemma 3 1B** (`gemma3:1b`) with 100% on-premises data isolation.
    * **Automatic Local Failover:** Instantly redirects traffic from Groq to local Ollama if cloud rate limits (429/OTPM) are encountered.
 
-3. **PR Auto-Remediation (Sweep.dev Pattern):**
+4. **PR Auto-Remediation (Sweep.dev Pattern):**
    * Computes unified git patches, parses AST syntax trees for validation, and applies changes directly to target files with automatic rollback safety.
 
-4. **Static Blast Radius Engine:**
+5. **Static Blast Radius Engine:**
    * NetworkX call hierarchy graph computing exact downstream risk percentages before PR merges.
 
-5. **Headless Linux CLI Tool (`cli.py`):**
+6. **Automated CI/CD Quality Gate & PR Reviewer (`scripts/ai_pr_reviewer.py`):**
+   * GitHub Actions workflow ([`.github/workflows/ai-check.yml`](.github/workflows/ai-check.yml)) inspecting git diffs, assigning risk levels (`LOW / MEDIUM / HIGH`), flagging OWASP vulnerabilities, and generating regression test cases as CI build artifacts (`pr_review_report.md`).
+
+7. **Headless Linux CLI Tool (`cli.py`):**
    * Terminal-native interface supporting `query`, `audit`, `remediate`, and `benchmark` without requiring a web browser.
 
 ---
@@ -196,12 +204,15 @@ CodeSenseAI/
 │   ├── database/connection.py        # Connection pooling
 │   └── services/deployment_service.py # Deployment logic
 ├── scripts/
+│   ├── ai_pr_reviewer.py             # Automated CI/CD PR Reviewer & diff auditor
 │   ├── audit_logger.py               # Persistent SQLite WAL audit manager
 │   ├── benchmark_engine.py           # RAG Triad quantitative engine
 │   ├── codebase_watcher.py           # Real-time WatchDog daemon
 │   ├── dependency_graph.py           # AST Static Blast Radius & Call Graph
 │   ├── patch_generator.py            # PR Auto-Remediation & unified diff engine
 │   ├── roi_calculator.py             # Corporate ROI & financial calculator
+│   ├── run_sourcegraph.bat           # Self-hosted Sourcegraph OSS runner (Windows)
+│   ├── run_sourcegraph.sh            # Self-hosted Sourcegraph OSS runner (Linux)
 │   ├── podman_deploy.ps1             # Windows Podman 1-click deployer
 │   └── podman_deploy.sh              # Linux Podman 1-click deployer
 ├── tests/
