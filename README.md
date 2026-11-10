@@ -1,12 +1,12 @@
-# ⚡ CodeSense AI — Intelligent Developer Tools & AI DevOps Workflows
+# ⚡ CodeSense AI — Enterprise Developer Intelligence & AI DevOps Platform
 
-[![CSE 4011](https://img.shields.io/badge/Course-CSE%204011%20AI%20DevOps-blue.svg)](https://github.com/Jhalakk12/CodeSenseAI)
+[![Python](https://img.shields.io/badge/Python-3.12-blue.svg)](https://python.org)
 [![Tests](https://img.shields.io/badge/Automated%20Tests-57%2F57%20Passing-brightgreen.svg)](tests/)
-[![Podman](https://img.shields.io/badge/Container-Rootless%20Podman%20v6.1.4-purple.svg)](podman-compose.yml)
-[![K8s](https://img.shields.io/badge/Orchestration-Native%20Kubernetes%20Manifest-326ce5.svg)](podman-k8s.yaml)
+[![Podman](https://img.shields.io/badge/Container-Rootless%20Podman%20OCI-purple.svg)](podman-compose.yml)
+[![K8s](https://img.shields.io/badge/Orchestration-Native%20Kubernetes-326ce5.svg)](podman-k8s.yaml)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-**CodeSense AI** is an enterprise-grade AI DevOps and developer intelligence platform designed to eliminate code comprehension bottlenecks, automate continuous code reviews and AST patch remediations, and deliver unprivileged, rootless container security. Built for **CSE 4011: Intelligent Developer Tools and AI DevOps Workflows** (Final Evaluation A3).
+**CodeSense AI** is an enterprise-grade developer intelligence platform and AI DevOps orchestration engine designed to eliminate code comprehension bottlenecks, automate continuous code reviews and AST patch remediations, and deliver unprivileged, rootless container security. Built to operate seamlessly across high-speed cloud LPUs and completely air-gapped on-premises deployments.
 
 ---
 
@@ -51,11 +51,11 @@
 
 ---
 
-## 🎯 6 End-Semester Roadmap Features (100% Implemented)
+## 🎯 Key Capabilities & Core Architecture
 
 ### 1. 👁️ Real-Time Codebase WatchDog Daemon (`scripts/codebase_watcher.py`)
-* Background background thread with **1.5-second debounced state tracking** (`watchdog` library).
-* Automatically detects code modifications (`.py`, `.ts`, `.go`), invalidates stale chunks, and hot-updates ChromaDB vector embeddings without restarting the server.
+* Background observer with **1.5-second debounced state tracking** (`watchdog` engine).
+* Automatically detects code modifications (`.py`, `.ts`, `.go`), invalidates stale chunks, and hot-updates ChromaDB vector embeddings without server reboots.
 * Emits real-time AST re-indexing events directly to the persistent SQLite audit database.
 
 ### 2. 📜 Persistent DevOps Audit History & Compliance Database (`scripts/audit_logger.py`)
@@ -64,7 +64,7 @@
 * Full audit trail survives browser reloads, container restarts, and VM power cycles with zero data loss.
 
 ### 3. 📱 Mobile DevOps Approval Portal with HITL Governance (`app.py` Tab 6)
-* Responsive Human-in-the-Loop (HITL) gatekeeping portal for on-call tech leads.
+* Responsive Human-in-the-Loop (HITL) gatekeeping portal for on-call engineering leads.
 * Inspect unified git diffs, review security implications, and approve or reject AI-generated code patches with 1-click execution.
 * Automatic physical file rollback and backup creation (`.bak`) on demand.
 
@@ -77,15 +77,14 @@
 * Sub-component latency profiling (Chroma retrieval ~85ms, Groq generation ~420ms).
 
 ### 5. 💰 Corporate ROI & Economic Impact Calculator (`scripts/roi_calculator.py`)
-* Quantifies organizational financial impact across 3 validated corporate presets:
+* Quantifies organizational financial impact across 3 validated organizational presets:
   * **Tech Startup (15 Engineers):** \$159,820/yr net savings | 1.8-day payback period
   * **Mid-Market Scaleup (75 Engineers):** \$820,910/yr net savings | 4.8-day payback period
   * **Global Enterprise MNC (250+ Engineers):** \$2,793,030/yr net savings | 6.4-day payback period
 * Models developer productivity reclamation, multi-SaaS commercial tool displacement (\$12k–\$108k/yr saved on Copilot, Sweep, Snyk), and incident risk reduction.
 
 ### 6. 🛡️ Enterprise Rootless Podman & Kubernetes Deployment (`podman-compose.yml`, `podman-k8s.yaml`)
-* Direct response to faculty feedback (*"Docker should be replaced with Podman / Run using only Podman"*).
-* **Zero Root Daemon:** Operates in unprivileged user namespaces (`userns_mode: keep-id`) with SELinux volume relabeling (`:Z`), eliminating container breakout vulnerabilities.
+* **Zero Root Daemon:** Operates in unprivileged user namespaces (`userns_mode: keep-id`) with SELinux volume relabeling (`:Z`), eliminating container breakout vulnerabilities when analyzing untrusted code.
 * **Co-located Multi-Service Pod:** Dual-container architecture orchestrating `codesense-app` (port 8501) and private `codesense-ollama` (port 11434).
 * **Native Kubernetes Playability:** Fully deployable via native `podman play kube podman-k8s.yaml` without compose dependencies.
 
@@ -142,7 +141,7 @@ tests/test_watchdog.py (5 tests) ........................................ PASSED
 
 ## 🚀 Quickstart & Deployment Guide
 
-### Option 1: Rootless Podman (Recommended for Course Defense)
+### Option 1: Rootless Podman (Production Deployment)
 ```powershell
 # 1. Start the dual-container Podman stack:
 .\scripts\podman_deploy.ps1
@@ -187,8 +186,8 @@ CodeSenseAI/
 │   ├── benchmark_50_queries.json     # Standardized 50-query evaluation dataset
 │   └── codesense_audit.db            # Persistent SQLite WAL audit database
 ├── docs/
-│   ├── DEMO_GUIDE.md                 # Faculty 3-minute viva walkthrough script
-│   ├── EVALUATION_2_RESEARCH_COMPARISON.md # Research papers, formulas & defense report
+│   ├── DEMO_GUIDE.md                 # Interactive system demonstration guide
+│   ├── EVALUATION_2_RESEARCH_COMPARISON.md # Research papers, formulas & architecture report
 │   ├── PODMAN_DEPLOYMENT_GUIDE.md    # Rootless Podman deployment architecture
 │   └── MID_SEM_PRESENTATION.md       # Mid-semester architecture records
 ├── sample_repo/                      # Isolated target microservice for live testing
@@ -197,40 +196,40 @@ CodeSenseAI/
 │   ├── database/connection.py        # Connection pooling
 │   └── services/deployment_service.py # Deployment logic
 ├── scripts/
-│   ├── audit_logger.py               # Feature 2: Persistent SQLite WAL audit manager
-│   ├── benchmark_engine.py           # Feature 4: RAG Triad quantitative engine
-│   ├── codebase_watcher.py           # Feature 1: Real-time WatchDog daemon
+│   ├── audit_logger.py               # Persistent SQLite WAL audit manager
+│   ├── benchmark_engine.py           # RAG Triad quantitative engine
+│   ├── codebase_watcher.py           # Real-time WatchDog daemon
 │   ├── dependency_graph.py           # AST Static Blast Radius & Call Graph
 │   ├── patch_generator.py            # PR Auto-Remediation & unified diff engine
-│   ├── roi_calculator.py             # Feature 5: Corporate ROI & financial calculator
-│   ├── podman_deploy.ps1             # Feature 6: Windows Podman 1-click deployer
-│   └── podman_deploy.sh              # Feature 6: Linux Podman 1-click deployer
+│   ├── roi_calculator.py             # Corporate ROI & financial calculator
+│   ├── podman_deploy.ps1             # Windows Podman 1-click deployer
+│   └── podman_deploy.sh              # Linux Podman 1-click deployer
 ├── tests/
-│   ├── test_audit_logger.py          # Feature 2 test suite (5 tests)
-│   ├── test_benchmarks.py            # Feature 4 test suite (7 tests)
+│   ├── test_audit_logger.py          # Audit database test suite (5 tests)
+│   ├── test_benchmarks.py            # Benchmark engine test suite (7 tests)
 │   ├── test_dependency_graph.py      # Dependency & blast radius suite (6 tests)
 │   ├── test_hybrid_engine.py         # Dual-LLM & failover suite (6 tests)
-│   ├── test_mobile_approval.py       # Feature 3 test suite (3 tests)
+│   ├── test_mobile_approval.py       # Mobile approval portal suite (3 tests)
 │   ├── test_patch_generator.py       # Patch generation & rollback suite (7 tests)
-│   ├── test_podman_compose.py        # Feature 6 test suite (6 tests)
-│   ├── test_roi_calculator.py        # Feature 5 test suite (6 tests)
+│   ├── test_podman_compose.py        # Podman deployment suite (6 tests)
+│   ├── test_roi_calculator.py        # Corporate ROI test suite (6 tests)
 │   ├── test_sample_repo.py           # Microservice baseline suite (3 tests)
-│   └── test_watchdog.py              # Feature 1 test suite (5 tests)
+│   └── test_watchdog.py              # Watchdog daemon test suite (5 tests)
 ├── app.py                            # Streamlit 7-Tab Developer Console
 ├── cli.py                            # Headless Linux CLI engine
 ├── rag_engine.py                     # LangChain + ChromaDB RAG orchestration
 ├── Dockerfile                        # Multi-stage container specification
 ├── docker-compose.yml                # Docker orchestration file
-├── podman-compose.yml                # Feature 6: Enterprise rootless Podman compose
-├── podman-k8s.yaml                   # Feature 6: Kubernetes Pod manifest
+├── podman-compose.yml                # Enterprise rootless Podman compose
+├── podman-k8s.yaml                   # Kubernetes Pod manifest
 └── README.md                         # Project documentation
 ```
 
 ---
 
-## 🎓 Academic Defense & Faculty Alignment
+## 📄 Research Citations & Architecture Alignment
 
-* **Course:** CSE 4011 — Intelligent Developer Tools and AI DevOps Workflows
-* **Evaluation:** Final A3 Evaluation (40% Weightage)
-* **Faculty:** Dr. Kiran Khatter & Mr. Naveen Singh (School of Engineering and Technology, BML Munjal University)
-* **Research Paper Comparisons:** Comprehensive benchmarks against Meta AST-T5, Google CodeMend, Sweep.dev, and TruLens RAG Triad documented in [`docs/EVALUATION_2_RESEARCH_COMPARISON.md`](docs/EVALUATION_2_RESEARCH_COMPARISON.md).
+* **AST Semantic Splitting:** Evaluated against Meta AST-T5 (*"A Tree-based Pre-trained Model for Code Comprehension"*, 2024).
+* **Multi-Turn Remediation:** Modeled after Google CodeMend (*"Collaborative Automated Code Editing"*, 2024) and Sweep.dev agent architectures.
+* **Evaluation Framework:** Standardized on the TruLens RAG Triad specification (Context Relevance, Groundedness, Answer Relevance).
+* **Rootless Isolation:** Compliant with Open Container Initiative (OCI) v1.0 and Kubernetes v1 Pod specifications.

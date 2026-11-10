@@ -3,7 +3,7 @@
 **Institution:** School of Engineering and Technology, BML Munjal University  
 **Evaluation Component:** A2 — Project Phase Evaluation 2 (30% Weightage)  
 **Academic Year:** 2026–27 | 7th Semester | Batch 2023–27  
-**Team Members:** Jhalak Kapila, Khushi Hooda, Aastha Thakur  
+**Team Members:** Jhalak Kapila, Khushi Hooda  
 **GitHub Repository:** https://github.com/Jhalakk12/CodeSenseAI  
 
 ---

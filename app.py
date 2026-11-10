@@ -163,7 +163,7 @@ engine = get_engine()
 
 # --- SIDEBAR: Configuration & DevOps Controls ---
 with st.sidebar:
-    st.markdown('<span class="header-badge">CSE 4011 • AI DevOps Workflows</span>', unsafe_allow_html=True)
+    st.markdown('<span class="header-badge">Enterprise AI DevOps Platform</span>', unsafe_allow_html=True)
     st.title("⚡ CodeSense AI")
     st.caption("Intelligent Code Assistant & DevOps Pipeline")
     st.markdown("---")

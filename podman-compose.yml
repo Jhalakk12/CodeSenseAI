@@ -1,7 +1,7 @@
 # ==============================================================================
 # CodeSense AI — Enterprise Rootless Podman Compose Orchestration
 # Designed for Rootless, Daemonless, Zero-Trust Container Environments
-# Aligned with CSE 4011 AI DevOps Specification (Addressing Faculty Feedback)
+# Production-Grade Zero-Trust Container Architecture
 # ==============================================================================
 
 version: '3.8'

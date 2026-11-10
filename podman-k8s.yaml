@@ -11,7 +11,7 @@ metadata:
   labels:
     app: codesense-ai
     tier: devops-intelligence
-    course: cse4011-ai-devops
+    environment: production
 spec:
   restartPolicy: Always
   containers:

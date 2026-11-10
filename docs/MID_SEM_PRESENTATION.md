@@ -1,7 +1,7 @@
 # 📊 CodeSense AI — Mid-Semester Examination Presentation Deck
 **Course:** CSE 4011: Intelligent Developer Tools and AI DevOps Workflows  
 **Institution:** School of Engineering and Technology, BML Munjal University  
-**Team Members:** Jhalak Kapila, Khushi Hooda, Aastha Thakur  
+**Team Members:** Jhalak Kapila, Khushi Hooda  
 **Project Title:** CodeSense AI: AST-Aware Semantic Code Intelligence & Automated DevOps Quality Gate  
 **Evaluation:** A2 — Mid-Term Project Defense (30% Weightage)  
 
@@ -35,12 +35,11 @@
 * **Team Members & Responsibilities:**
   * **Jhalak Kapila** — Core RAG Engine & DevOps Architecture
   * **Khushi Hooda** — Automated Testing & Quality Assurance
-  * **Aastha Thakur** — UI/UX, Ingestion & Tool Setup
 * **Academic Year:** 7th Semester | Batch 2023–27 | BML Munjal University
 * **GitHub Repository:** `https://github.com/Jhalakk12/CodeSenseAI`
 
 > **🎙️ Speaker Script (15 Seconds):**  
-> *"Good morning, Sir. Today our team is presenting CodeSense AI — an intelligent developer tool and automated DevOps quality gate. Our team consists of Jhalak Kapila as the team lead and core systems architect, Khushi Hooda leading automated testing and QA, and Aastha Thakur handling the UI console and tool integration. Our project bridges the gap between semantic codebase understanding and automated CI/CD pipeline auditing by combining AST-aware code retrieval with Groq LPU acceleration and automated pull request quality gates."*
+> *"Good morning, Sir. Today our team is presenting CodeSense AI — an intelligent developer tool and automated DevOps quality gate. Our team consists of Jhalak Kapila as the team lead and core systems architect, and Khushi Hooda leading automated testing and QA. Our project bridges the gap between semantic codebase understanding and automated CI/CD pipeline auditing by combining AST-aware code retrieval with Groq LPU acceleration and automated pull request quality gates."*
 
 ---
 

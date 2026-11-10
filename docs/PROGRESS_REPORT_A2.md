@@ -1,7 +1,7 @@
 # CodeSense AI — Phase 2 Progress Report (A2 Evaluation)
 **Course:** CSE 4011: Intelligent Developer Tools and AI DevOps Workflows  
 **Institution:** School of Engineering and Technology, BML Munjal University  
-**Team Members:** Jhalak Kapila, Khushi Hooda, Aastha Thakur  
+**Team Members:** Jhalak Kapila, Khushi Hooda  
 **Evaluation Schedule:** Mid-Term Examination (October 2026)  
 **Evaluation Component:** A2 — Project Phase Evaluation 2 (Weightage: 30%)  
 
@@ -83,7 +83,6 @@ tests/test_ui_selenium.py::test_streamlit_ui_live_render PASSED          [100%]
 | :--- | :--- | :--- |
 | **Jhalak Kapila** *(Lead)* | Lead AI & DevOps Architect | • Core LangChain RAG pipeline & AST-aware code parser (`rag_engine.py`)<br>• Local ChromaDB dense vector store & Groq LPU sub-second inference engine<br>• GitHub Actions CI/CD Quality Gate & Automated PR Reviewer (`scripts/ai_pr_reviewer.py`)<br>• Overall 7-service micro-orchestration & Linux CLI containerization (`cli.py`, `Dockerfile`) |
 | **Khushi Hooda** | Testing, Automation & QA Lead | • Behavior-driven test generation engine (CodiumAI workflow in `task_mode="testing"`)<br>• Backend microservice unit test suite (`tests/test_sample_repo.py`)<br>• Headless Chrome Selenium WebDriver E2E test suite (`tests/test_ui_selenium.py`)<br>• Flake8 static code analysis, PEP8 enforcement, and quality gate linting rules |
-| **Aastha Thakur** | UI/UX & Tool Setup Assistant | • Streamlit DevOps Web Console frontend layout & dark-mode theme styling (`app.py`)<br>• Multi-mode repository ingestion loaders (ZIP upload, local directories, microservice)<br>• Local Sourcegraph OSS container configuration and testing (`scripts/run_sourcegraph.bat`)<br>• Documentation support for Project Charter and User Demo Guide (`PROJECT_CHARTER.md`, `DEMO_GUIDE.md`) |
 
 ---
 **GitHub Repository:** [https://github.com/Jhalakk12/CodeSenseAI](https://github.com/Jhalakk12/CodeSenseAI)
