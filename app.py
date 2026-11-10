@@ -1754,52 +1754,44 @@ with tab_roi:
     if "roi_preset" not in st.session_state:
         st.session_state["roi_preset"] = "startup"
 
+    def apply_roi_preset(preset_key):
+        preset_data = CorporateROICalculator.ORGANIZATION_PRESETS[preset_key]
+        st.session_state["roi_preset"] = preset_key
+        st.session_state["roi_team_size"] = int(preset_data["team_size"])
+        st.session_state["roi_team_size_input"] = int(preset_data["team_size"])
+        st.session_state["roi_hourly_rate"] = float(preset_data["avg_hourly_rate"])
+        st.session_state["roi_hourly_rate_input"] = float(preset_data["avg_hourly_rate"])
+        st.session_state["roi_hours_saved"] = float(preset_data["hours_saved_per_dev_month"])
+        st.session_state["roi_hours_saved_input"] = float(preset_data["hours_saved_per_dev_month"])
+        st.session_state["roi_copilot"] = bool(preset_data["displace_copilot"])
+        st.session_state["roi_copilot_input"] = bool(preset_data["displace_copilot"])
+        st.session_state["roi_sweep"] = bool(preset_data["displace_sweep"])
+        st.session_state["roi_sweep_input"] = bool(preset_data["displace_sweep"])
+        st.session_state["roi_snyk"] = bool(preset_data["displace_snyk"])
+        st.session_state["roi_snyk_input"] = bool(preset_data["displace_snyk"])
+        st.session_state["roi_incidents"] = int(preset_data["prevented_incidents_per_year"])
+        st.session_state["roi_incidents_input"] = int(preset_data["prevented_incidents_per_year"])
+        st.session_state["roi_inc_cost"] = float(preset_data["avg_incident_cost"])
+        st.session_state["roi_inc_cost_input"] = float(preset_data["avg_incident_cost"])
+        st.session_state["roi_tco"] = float(preset_data["codesense_annual_tco"])
+        st.session_state["roi_tco_input"] = float(preset_data["codesense_annual_tco"])
+
     with col_p1:
         if st.button("🚀 Tech Startup\n(15 Engineers)", use_container_width=True, key="btn_roi_startup"):
             log_backend("ROI_PRESET", "Selected profile: Tech Startup (15 Engineers)")
-            st.session_state["roi_preset"] = "startup"
-            preset_data = CorporateROICalculator.ORGANIZATION_PRESETS["startup"]
-            st.session_state["roi_team_size"] = preset_data["team_size"]
-            st.session_state["roi_hourly_rate"] = preset_data["avg_hourly_rate"]
-            st.session_state["roi_hours_saved"] = preset_data["hours_saved_per_dev_month"]
-            st.session_state["roi_copilot"] = preset_data["displace_copilot"]
-            st.session_state["roi_sweep"] = preset_data["displace_sweep"]
-            st.session_state["roi_snyk"] = preset_data["displace_snyk"]
-            st.session_state["roi_incidents"] = preset_data["prevented_incidents_per_year"]
-            st.session_state["roi_inc_cost"] = preset_data["avg_incident_cost"]
-            st.session_state["roi_tco"] = preset_data["codesense_annual_tco"]
+            apply_roi_preset("startup")
             st.rerun()
 
     with col_p2:
         if st.button("🏢 Mid-Market Scaleup\n(75 Engineers)", use_container_width=True, key="btn_roi_midmarket"):
             log_backend("ROI_PRESET", "Selected profile: Mid-Market Scaleup (75 Engineers)")
-            st.session_state["roi_preset"] = "midmarket"
-            preset_data = CorporateROICalculator.ORGANIZATION_PRESETS["midmarket"]
-            st.session_state["roi_team_size"] = preset_data["team_size"]
-            st.session_state["roi_hourly_rate"] = preset_data["avg_hourly_rate"]
-            st.session_state["roi_hours_saved"] = preset_data["hours_saved_per_dev_month"]
-            st.session_state["roi_copilot"] = preset_data["displace_copilot"]
-            st.session_state["roi_sweep"] = preset_data["displace_sweep"]
-            st.session_state["roi_snyk"] = preset_data["displace_snyk"]
-            st.session_state["roi_incidents"] = preset_data["prevented_incidents_per_year"]
-            st.session_state["roi_inc_cost"] = preset_data["avg_incident_cost"]
-            st.session_state["roi_tco"] = preset_data["codesense_annual_tco"]
+            apply_roi_preset("midmarket")
             st.rerun()
 
     with col_p3:
         if st.button("🏛️ Global Enterprise MNC\n(250+ Engineers)", use_container_width=True, key="btn_roi_enterprise"):
             log_backend("ROI_PRESET", "Selected profile: Global Enterprise MNC (250+ Engineers)")
-            st.session_state["roi_preset"] = "enterprise"
-            preset_data = CorporateROICalculator.ORGANIZATION_PRESETS["enterprise"]
-            st.session_state["roi_team_size"] = preset_data["team_size"]
-            st.session_state["roi_hourly_rate"] = preset_data["avg_hourly_rate"]
-            st.session_state["roi_hours_saved"] = preset_data["hours_saved_per_dev_month"]
-            st.session_state["roi_copilot"] = preset_data["displace_copilot"]
-            st.session_state["roi_sweep"] = preset_data["displace_sweep"]
-            st.session_state["roi_snyk"] = preset_data["displace_snyk"]
-            st.session_state["roi_incidents"] = preset_data["prevented_incidents_per_year"]
-            st.session_state["roi_inc_cost"] = preset_data["avg_incident_cost"]
-            st.session_state["roi_tco"] = preset_data["codesense_annual_tco"]
+            apply_roi_preset("enterprise")
             st.rerun()
 
     # Initialize session state variables if not already set
@@ -1808,22 +1800,48 @@ with tab_roi:
 
     if "roi_team_size" not in st.session_state:
         st.session_state["roi_team_size"] = active_profile["team_size"]
+    if "roi_team_size_input" not in st.session_state:
+        st.session_state["roi_team_size_input"] = int(active_profile["team_size"])
+
     if "roi_hourly_rate" not in st.session_state:
         st.session_state["roi_hourly_rate"] = active_profile["avg_hourly_rate"]
+    if "roi_hourly_rate_input" not in st.session_state:
+        st.session_state["roi_hourly_rate_input"] = float(active_profile["avg_hourly_rate"])
+
     if "roi_hours_saved" not in st.session_state:
         st.session_state["roi_hours_saved"] = active_profile["hours_saved_per_dev_month"]
+    if "roi_hours_saved_input" not in st.session_state:
+        st.session_state["roi_hours_saved_input"] = float(active_profile["hours_saved_per_dev_month"])
+
     if "roi_copilot" not in st.session_state:
         st.session_state["roi_copilot"] = active_profile["displace_copilot"]
+    if "roi_copilot_input" not in st.session_state:
+        st.session_state["roi_copilot_input"] = bool(active_profile["displace_copilot"])
+
     if "roi_sweep" not in st.session_state:
         st.session_state["roi_sweep"] = active_profile["displace_sweep"]
+    if "roi_sweep_input" not in st.session_state:
+        st.session_state["roi_sweep_input"] = bool(active_profile["displace_sweep"])
+
     if "roi_snyk" not in st.session_state:
         st.session_state["roi_snyk"] = active_profile["displace_snyk"]
+    if "roi_snyk_input" not in st.session_state:
+        st.session_state["roi_snyk_input"] = bool(active_profile["displace_snyk"])
+
     if "roi_incidents" not in st.session_state:
         st.session_state["roi_incidents"] = active_profile["prevented_incidents_per_year"]
+    if "roi_incidents_input" not in st.session_state:
+        st.session_state["roi_incidents_input"] = int(active_profile["prevented_incidents_per_year"])
+
     if "roi_inc_cost" not in st.session_state:
         st.session_state["roi_inc_cost"] = active_profile["avg_incident_cost"]
+    if "roi_inc_cost_input" not in st.session_state:
+        st.session_state["roi_inc_cost_input"] = float(active_profile["avg_incident_cost"])
+
     if "roi_tco" not in st.session_state:
         st.session_state["roi_tco"] = active_profile["codesense_annual_tco"]
+    if "roi_tco_input" not in st.session_state:
+        st.session_state["roi_tco_input"] = float(active_profile["codesense_annual_tco"])
 
     st.markdown(f"**Active Preset:** `{active_profile['name']}` — *{active_profile['description']}*")
     st.markdown("---")
