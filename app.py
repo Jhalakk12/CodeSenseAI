@@ -621,13 +621,14 @@ def render_model_output(text: str):
     else:
         st.markdown(text)
 
-tab_chat, tab_remediation, tab_graph, tab_audit, tab_mobile, tab_benchmark = st.tabs([
+tab_chat, tab_remediation, tab_graph, tab_audit, tab_mobile, tab_benchmark, tab_roi = st.tabs([
     "💬 Semantic Code Assistant",
     "🛠️ PR Auto-Remediation (Sweep.dev Pattern)",
     "🕸️ Dependency & Blast Radius Visualizer",
     "📜 DevOps Audit Trail & Compliance",
     "📱 Mobile DevOps Approval Portal",
-    "📊 Quantitative Benchmarking & RAG Triad"
+    "📊 Quantitative Benchmarking & RAG Triad",
+    "💰 Corporate ROI & Economic Calculator"
 ])
 
 with tab_chat:
@@ -1681,6 +1682,324 @@ with tab_benchmark:
             mime="application/json",
             use_container_width=True
         )
+
+# ==============================================================================
+# TAB 7: CORPORATE ROI & ECONOMIC IMPACT CALCULATOR
+# ==============================================================================
+with tab_roi:
+    import importlib
+    import scripts.roi_calculator
+    importlib.reload(scripts.roi_calculator)
+    from scripts.roi_calculator import CorporateROICalculator
+
+    st.markdown("### 💰 Corporate ROI & Economic Impact Calculator")
+    st.caption(
+        "Quantify the financial return on investment, engineering hours reclaimed, and commercial SaaS displacement "
+        "when deploying CodeSense AI across Startups, Mid-Market scaleups, and Global MNCs."
+    )
+
+    # 1. Organization Archetype Preset Selector
+    st.markdown("##### 🏢 Select Organization Profile Preset")
+    col_p1, col_p2, col_p3 = st.columns(3)
+
+    if "roi_preset" not in st.session_state:
+        st.session_state["roi_preset"] = "startup"
+
+    with col_p1:
+        if st.button("🚀 Tech Startup\n(15 Engineers)", use_container_width=True, key="btn_roi_startup"):
+            st.session_state["roi_preset"] = "startup"
+            preset_data = CorporateROICalculator.ORGANIZATION_PRESETS["startup"]
+            st.session_state["roi_team_size"] = preset_data["team_size"]
+            st.session_state["roi_hourly_rate"] = preset_data["avg_hourly_rate"]
+            st.session_state["roi_hours_saved"] = preset_data["hours_saved_per_dev_month"]
+            st.session_state["roi_copilot"] = preset_data["displace_copilot"]
+            st.session_state["roi_sweep"] = preset_data["displace_sweep"]
+            st.session_state["roi_snyk"] = preset_data["displace_snyk"]
+            st.session_state["roi_incidents"] = preset_data["prevented_incidents_per_year"]
+            st.session_state["roi_inc_cost"] = preset_data["avg_incident_cost"]
+            st.session_state["roi_tco"] = preset_data["codesense_annual_tco"]
+            st.rerun()
+
+    with col_p2:
+        if st.button("🏢 Mid-Market Scaleup\n(75 Engineers)", use_container_width=True, key="btn_roi_midmarket"):
+            st.session_state["roi_preset"] = "midmarket"
+            preset_data = CorporateROICalculator.ORGANIZATION_PRESETS["midmarket"]
+            st.session_state["roi_team_size"] = preset_data["team_size"]
+            st.session_state["roi_hourly_rate"] = preset_data["avg_hourly_rate"]
+            st.session_state["roi_hours_saved"] = preset_data["hours_saved_per_dev_month"]
+            st.session_state["roi_copilot"] = preset_data["displace_copilot"]
+            st.session_state["roi_sweep"] = preset_data["displace_sweep"]
+            st.session_state["roi_snyk"] = preset_data["displace_snyk"]
+            st.session_state["roi_incidents"] = preset_data["prevented_incidents_per_year"]
+            st.session_state["roi_inc_cost"] = preset_data["avg_incident_cost"]
+            st.session_state["roi_tco"] = preset_data["codesense_annual_tco"]
+            st.rerun()
+
+    with col_p3:
+        if st.button("🏛️ Global Enterprise MNC\n(250+ Engineers)", use_container_width=True, key="btn_roi_enterprise"):
+            st.session_state["roi_preset"] = "enterprise"
+            preset_data = CorporateROICalculator.ORGANIZATION_PRESETS["enterprise"]
+            st.session_state["roi_team_size"] = preset_data["team_size"]
+            st.session_state["roi_hourly_rate"] = preset_data["avg_hourly_rate"]
+            st.session_state["roi_hours_saved"] = preset_data["hours_saved_per_dev_month"]
+            st.session_state["roi_copilot"] = preset_data["displace_copilot"]
+            st.session_state["roi_sweep"] = preset_data["displace_sweep"]
+            st.session_state["roi_snyk"] = preset_data["displace_snyk"]
+            st.session_state["roi_incidents"] = preset_data["prevented_incidents_per_year"]
+            st.session_state["roi_inc_cost"] = preset_data["avg_incident_cost"]
+            st.session_state["roi_tco"] = preset_data["codesense_annual_tco"]
+            st.rerun()
+
+    # Initialize session state variables if not already set
+    active_preset_name = st.session_state.get("roi_preset", "startup")
+    active_profile = CorporateROICalculator.ORGANIZATION_PRESETS.get(active_preset_name, CorporateROICalculator.ORGANIZATION_PRESETS["startup"])
+
+    if "roi_team_size" not in st.session_state:
+        st.session_state["roi_team_size"] = active_profile["team_size"]
+    if "roi_hourly_rate" not in st.session_state:
+        st.session_state["roi_hourly_rate"] = active_profile["avg_hourly_rate"]
+    if "roi_hours_saved" not in st.session_state:
+        st.session_state["roi_hours_saved"] = active_profile["hours_saved_per_dev_month"]
+    if "roi_copilot" not in st.session_state:
+        st.session_state["roi_copilot"] = active_profile["displace_copilot"]
+    if "roi_sweep" not in st.session_state:
+        st.session_state["roi_sweep"] = active_profile["displace_sweep"]
+    if "roi_snyk" not in st.session_state:
+        st.session_state["roi_snyk"] = active_profile["displace_snyk"]
+    if "roi_incidents" not in st.session_state:
+        st.session_state["roi_incidents"] = active_profile["prevented_incidents_per_year"]
+    if "roi_inc_cost" not in st.session_state:
+        st.session_state["roi_inc_cost"] = active_profile["avg_incident_cost"]
+    if "roi_tco" not in st.session_state:
+        st.session_state["roi_tco"] = active_profile["codesense_annual_tco"]
+
+    st.markdown(f"**Active Preset:** `{active_profile['name']}` — *{active_profile['description']}*")
+    st.markdown("---")
+
+    # 2. Interactive Input Controls (2 Columns)
+    in_col1, in_col2 = st.columns(2)
+
+    with in_col1:
+        st.markdown("#### ⚙️ Team & Developer Productivity")
+        team_size = st.slider(
+            "Engineering Team Size (Developers)",
+            min_value=1,
+            max_value=500,
+            value=st.session_state["roi_team_size"],
+            step=1,
+            key="roi_team_size_input"
+        )
+        avg_hourly_rate = st.slider(
+            "Average Blended Hourly Compensation ($/hr)",
+            min_value=20.0,
+            max_value=200.0,
+            value=float(st.session_state["roi_hourly_rate"]),
+            step=5.0,
+            key="roi_hourly_rate_input"
+        )
+        hours_saved = st.slider(
+            "Developer Hours Reclaimed / Dev / Month",
+            min_value=1.0,
+            max_value=25.0,
+            value=float(st.session_state["roi_hours_saved"]),
+            step=0.5,
+            help="Includes semantic codebase Q&A, automated AST dependency tracing, and Sweep.dev PR generation.",
+            key="roi_hours_saved_input"
+        )
+
+        st.markdown("#### 🛡️ Incident & Risk Mitigation")
+        incidents = st.slider(
+            "Prevented Production Regressions / Year",
+            min_value=0,
+            max_value=30,
+            value=int(st.session_state["roi_incidents"]),
+            step=1,
+            help="High-severity bugs caught by AST blast radius quality gates prior to production deployment.",
+            key="roi_incidents_input"
+        )
+        incident_cost = st.number_input(
+            "Average Triage & Outage Cost per Incident ($)",
+            min_value=500.0,
+            max_value=50000.0,
+            value=float(st.session_state["roi_inc_cost"]),
+            step=500.0,
+            key="roi_inc_cost_input"
+        )
+
+    with in_col2:
+        st.markdown("#### ☁️ Displaced Commercial SaaS Subscriptions")
+        st.caption("Commercial tool licenses eliminated by deploying CodeSense AI self-hosted:")
+
+        displace_copilot = st.checkbox(
+            "Replace GitHub Copilot Enterprise ($39 / dev / month)",
+            value=bool(st.session_state["roi_copilot"]),
+            key="roi_copilot_input"
+        )
+        displace_sweep = st.checkbox(
+            "Replace Sweep.dev Autonomous PR Bot ($480 / team / month)",
+            value=bool(st.session_state["roi_sweep"]),
+            key="roi_sweep_input"
+        )
+        displace_snyk = st.checkbox(
+            "Replace Snyk Code / SonarQube Enterprise ($120 / dev / month)",
+            value=bool(st.session_state["roi_snyk"]),
+            key="roi_snyk_input"
+        )
+
+        st.markdown("#### 💻 CodeSense AI Infrastructure & TCO")
+        annual_tco = st.number_input(
+            "CodeSense AI Estimated Annual TCO ($/year)",
+            min_value=50.0,
+            max_value=25000.0,
+            value=float(st.session_state["roi_tco"]),
+            step=50.0,
+            help="Self-hosted local Ollama compute amortization + Groq SRAM LPU API usage.",
+            key="roi_tco_input"
+        )
+
+    # 3. Calculate Real-Time Economic Model
+    roi_results = CorporateROICalculator.calculate_roi(
+        team_size=team_size,
+        avg_hourly_rate=avg_hourly_rate,
+        hours_saved_per_dev_month=hours_saved,
+        prevented_incidents_per_year=incidents,
+        avg_incident_cost=incident_cost,
+        displace_copilot=displace_copilot,
+        displace_sweep=displace_sweep,
+        displace_snyk=displace_snyk,
+        codesense_annual_tco=annual_tco,
+        org_name=active_profile["name"]
+    )
+
+    labor = roi_results["labor_metrics"]
+    saas = roi_results["saas_displacement"]
+    risk = roi_results["risk_mitigation"]
+    fin = roi_results["financial_summary"]
+
+    st.markdown("---")
+
+    # 4. Hero Financial Scorecard (4 Key Metrics)
+    st.markdown("#### 🏆 Executive Financial Scorecard")
+    m1, m2, m3, m4 = st.columns(4)
+
+    with m1:
+        st.markdown(f"""
+        <div style="background-color: #161b22; border: 1px solid #238636; border-radius: 8px; padding: 16px; text-align: center;">
+            <div style="color: #7ee787; font-size: 13px; font-weight: 600; text-transform: uppercase;">💰 Net Annual Savings</div>
+            <div style="color: #ffffff; font-size: 28px; font-weight: 700; margin: 6px 0;">${fin['annual_net_savings']:,.2f}</div>
+            <div style="color: #8b949e; font-size: 12px;">Gross Benefit - Total TCO</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with m2:
+        st.markdown(f"""
+        <div style="background-color: #161b22; border: 1px solid #1f6feb; border-radius: 8px; padding: 16px; text-align: center;">
+            <div style="color: #58a6ff; font-size: 13px; font-weight: 600; text-transform: uppercase;">📈 Return on Investment</div>
+            <div style="color: #ffffff; font-size: 28px; font-weight: 700; margin: 6px 0;">{fin['roi_percentage']:,.1f}%</div>
+            <div style="color: #8b949e; font-size: 12px;">Cost-Benefit: {fin['cost_benefit_ratio']:.1f}x Multiplier</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with m3:
+        st.markdown(f"""
+        <div style="background-color: #161b22; border: 1px solid #d29922; border-radius: 8px; padding: 16px; text-align: center;">
+            <div style="color: #e3b341; font-size: 13px; font-weight: 600; text-transform: uppercase;">⏱️ Payback Period</div>
+            <div style="color: #ffffff; font-size: 28px; font-weight: 700; margin: 6px 0;">{fin['payback_days']} Days</div>
+            <div style="color: #8b949e; font-size: 12px;">Immediate Break-Even</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with m4:
+        st.markdown(f"""
+        <div style="background-color: #161b22; border: 1px solid #a371f7; border-radius: 8px; padding: 16px; text-align: center;">
+            <div style="color: #d2a8ff; font-size: 13px; font-weight: 600; text-transform: uppercase;">⚡ Developer Hours Saved</div>
+            <div style="color: #ffffff; font-size: 28px; font-weight: 700; margin: 6px 0;">{labor['annual_hours_reclaimed']:,.0f} hrs</div>
+            <div style="color: #8b949e; font-size: 12px;">{labor['monthly_hours_reclaimed']:,.0f} hrs/month reclaimed</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # 5. Value Distribution Breakdown & Competitive TCO Matrix
+    break_col1, break_col2 = st.columns([1, 1])
+
+    with break_col1:
+        st.markdown("##### 📊 Gross Annual Value Composition")
+        st.markdown(
+            f"""
+            * **👨‍💻 Reclaimed Engineering Labor:** `${labor['annual_labor_value']:,.2f}` **({fin['shares']['labor_pct']}%)**
+            * **☁️ Displaced Commercial SaaS:** `${saas['annual_saas_displaced']:,.2f}` **({fin['shares']['saas_pct']}%)**
+            * **🛡️ Prevented Incidents & Outages:** `${risk['annual_incident_savings']:,.2f}` **({fin['shares']['incident_pct']}%)**
+            * **💵 Total Gross Value Created:** **`${fin['annual_gross_benefit']:,.2f} / year`**
+            """
+        )
+
+        # Proportional Visual Progress Breakdown
+        st.caption("Labor Productivity Share:")
+        st.progress(float(fin["shares"]["labor_pct"]) / 100.0)
+        st.caption("Displaced SaaS License Share:")
+        st.progress(float(fin["shares"]["saas_pct"]) / 100.0)
+        st.caption("Risk & Outage Mitigation Share:")
+        st.progress(float(fin["shares"]["incident_pct"]) / 100.0)
+
+    with break_col2:
+        st.markdown("##### ⚖️ Head-to-Head Architectural & Cost Comparison")
+        comp_table = [
+            {
+                "Dimension": "Annual Cost / TCO",
+                "CodeSense AI (Proposed)": f"${fin['annual_tco']:,.2f} / yr",
+                "Commercial Multi-SaaS Suite": f"${saas['annual_saas_displaced']:,.2f} / yr"
+            },
+            {
+                "Dimension": "Enterprise Data Privacy",
+                "CodeSense AI (Proposed)": "100% Air-Gapped (Local Ollama)",
+                "Commercial Multi-SaaS Suite": "Third-Party Cloud APIs"
+            },
+            {
+                "Dimension": "PR Auto-Remediation",
+                "CodeSense AI (Proposed)": "In-Engine Unified Git Diffs (.bak)",
+                "Commercial Multi-SaaS Suite": "Sweep.dev Cloud Bot ($480/mo)"
+            },
+            {
+                "Dimension": "Dependency Blast Radius",
+                "CodeSense AI (Proposed)": "Zero-Execution AST Graph (<20ms)",
+                "Commercial Multi-SaaS Suite": "External Heavy Graph DBs (Neo4j)"
+            },
+            {
+                "Dimension": "License Lock-in",
+                "CodeSense AI (Proposed)": "Open Architecture & Ownership",
+                "Commercial Multi-SaaS Suite": "Proprietary Per-Seat SaaS Lock-in"
+            }
+        ]
+        st.dataframe(comp_table, use_container_width=True, hide_index=True)
+
+    st.markdown("---")
+
+    # 6. Export Executive Business Case
+    st.markdown("#### 📥 Export Executive Business Case")
+    st.caption("Generate an executive-ready business case report formatted for C-suite and VP Engineering review.")
+
+    exec_md = CorporateROICalculator.generate_executive_summary_markdown(roi_results)
+    exec_json = json.dumps(roi_results, indent=2)
+
+    dl_col1, dl_col2 = st.columns(2)
+    with dl_col1:
+        st.download_button(
+            label="📄 Download Executive Business Case (.md)",
+            data=exec_md,
+            file_name=f"codesense_roi_executive_summary_{active_preset_name}.md",
+            mime="text/markdown",
+            use_container_width=True
+        )
+    with dl_col2:
+        st.download_button(
+            label="📦 Download Financial Audit Model (.json)",
+            data=exec_json,
+            file_name=f"codesense_roi_financial_model_{active_preset_name}.json",
+            mime="application/json",
+            use_container_width=True
+        )
+
 
 
 

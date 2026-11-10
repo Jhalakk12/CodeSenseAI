@@ -4,6 +4,10 @@ Validates Context Relevance, Groundedness (hallucination defense), Answer Releva
 composite Triad scoring, latency profiler, and benchmark report generation.
 """
 
+import os
+import sys
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 try:
     import pytest
 except ImportError:
