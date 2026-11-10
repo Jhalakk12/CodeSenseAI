@@ -193,11 +193,6 @@ CodeSenseAI/
 ├── data/
 │   ├── benchmark_50_queries.json     # Standardized 50-query evaluation dataset
 │   └── codesense_audit.db            # Persistent SQLite WAL audit database
-├── docs/
-│   ├── DEMO_GUIDE.md                 # Interactive system demonstration guide
-│   ├── EVALUATION_2_RESEARCH_COMPARISON.md # Research papers, formulas & architecture report
-│   ├── PODMAN_DEPLOYMENT_GUIDE.md    # Rootless Podman deployment architecture
-│   └── MID_SEM_PRESENTATION.md       # Mid-semester architecture records
 ├── sample_repo/                      # Isolated target microservice for live testing
 │   ├── api/routes.py                 # REST routes
 │   ├── auth/jwt_handler.py           # Vulnerability remediation target
