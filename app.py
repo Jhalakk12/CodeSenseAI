@@ -71,6 +71,10 @@ st.markdown("""
         border-radius: 4px;
         font-size: 0.85rem;
     }
+    /* Hide default Streamlit chrome for sleek commercial SaaS look */
+    .stDeployButton, footer, #MainMenu {
+        display: none !important;
+    }
     /* Permanently lock the chat bar to the bottom of the viewport */
     div[data-testid="stChatInput"] {
         position: fixed !important;
@@ -653,13 +657,13 @@ def render_model_output(text: str):
         st.markdown(text)
 
 tab_chat, tab_remediation, tab_graph, tab_audit, tab_mobile, tab_benchmark, tab_roi = st.tabs([
-    "💬 Semantic Code Assistant",
-    "🛠️ PR Auto-Remediation (Sweep.dev Pattern)",
-    "🕸️ Dependency & Blast Radius Visualizer",
-    "📜 DevOps Audit Trail & Compliance",
-    "📱 Mobile DevOps Approval Portal",
-    "📊 Quantitative Benchmarking & RAG Triad",
-    "💰 Corporate ROI & Economic Calculator"
+    "💬 Code Assistant",
+    "🛠️ PR Remediation",
+    "🕸️ Blast Radius",
+    "📜 Audit Trail",
+    "📱 Mobile Portal",
+    "📊 Benchmarking",
+    "💰 Corporate ROI"
 ])
 
 with tab_chat:
