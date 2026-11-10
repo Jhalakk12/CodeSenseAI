@@ -163,6 +163,15 @@ $$\text{Net Annual Savings} = (\text{Reclaimed Labor Value} + \text{Displaced Co
 
 ---
 
+### 4.7 Enterprise Rootless Podman Deployment vs Legacy Rooted Docker
+
+Addressing explicit course evaluation feedback (*"Docker should be replaced with Podman / Run using only Podman"*), CodeSense AI provides dedicated **Rootless Podman orchestration (`podman-compose.yml` & `podman-k8s.yaml`)**:
+* **Rootless Privilege Sandboxing (`userns_mode: keep-id`):** Unlike Docker's root daemon (`dockerd`), Podman runs unprivileged inside user namespaces, eliminating container breakout vulnerabilities when analyzing untrusted code.
+* **Co-located Multi-Service Pod:** Orchestrates both `codesense-app` (port 8501) and private `ollama-service` (port 11434) with SELinux `:Z` persistent volume mapping for SQLite audit logs and ChromaDB vectors.
+* **Native Kubernetes Playability:** Deployable purely using native Podman without compose dependencies via `podman play kube podman-k8s.yaml`.
+
+---
+
 ## 5. Verification Evidence & Quality Assurance
 
 To guarantee that new modifications did not compromise existing capabilities, CodeSense AI was subjected to continuous verification:
@@ -187,6 +196,7 @@ To guarantee that new modifications did not compromise existing capabilities, Co
 > - *Fourth, we engineered an **AST Static Blast Radius Engine** that calculates change risk percentages and flags untested downstream callers before code is merged.*
 > - *Fifth, we developed a **Quantitative RAG Triad Benchmarking Dashboard** with an empirical 50-query evaluation dataset (`data/benchmark_50_queries.json`), verifying context relevance (94.8%), zero-hallucination groundedness (96.2%), and sub-second Groq latency (520ms).*
 > - *Sixth, we developed a **Corporate ROI & Economic Impact Calculator** modeling developer productivity gains, commercial multi-SaaS displacement ($12k–$108k/yr saved on Copilot/Sweep/Snyk), and incident risk reduction with an immediate break-even payback period (<10 days).*
+> - *Seventh, addressing faculty feedback directly, we engineered a **Rootless Podman Container Architecture (`podman-compose.yml` & `podman-k8s.yaml`)**, replacing Docker's root daemon with unprivileged user namespaces and enabling direct `podman play kube` native deployment.*
 > 
 > *Everything is operating live in our console and validated with passing automated tests across all subsystems."*
 

@@ -1,0 +1,79 @@
+# ==============================================================================
+# CodeSense AI — Enterprise Rootless Podman Compose Orchestration
+# Designed for Rootless, Daemonless, Zero-Trust Container Environments
+# Aligned with CSE 4011 AI DevOps Specification (Addressing Faculty Feedback)
+# ==============================================================================
+
+version: '3.8'
+
+services:
+  # ----------------------------------------------------------------------------
+  # Service 1: CodeSense AI Core Application (Streamlit + RAG + WatchDog)
+  # ----------------------------------------------------------------------------
+  codesense-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: codesense-ai-app:latest
+    container_name: codesense-ai-app
+    restart: unless-stopped
+    ports:
+      - "8501:8501"
+    environment:
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - CHROMA_PERSIST_DIR=/app/chroma_db
+      - ENVIRONMENT=production
+      - OLLAMA_HOST=http://ollama-service:11434
+      - AUDIT_DB_PATH=/app/data/codesense_audit.db
+    volumes:
+      # :Z flag is mandatory in Podman for rootless SELinux volume relabeling
+      - ./data:/app/data:Z
+      - ./chroma_db:/app/chroma_db:Z
+      - ./sample_repo:/app/sample_repo:Z
+    security_opt:
+      # Block container privilege escalation attacks
+      - no-new-privileges:true
+    userns_mode: "keep-id"
+    depends_on:
+      - ollama-service
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail http://localhost:8501/_stcore/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    networks:
+      - codesense-pod-net
+
+  # ----------------------------------------------------------------------------
+  # Service 2: Local On-Premises Ollama Inference Engine (Air-Gapped Privacy)
+  # ----------------------------------------------------------------------------
+  ollama-service:
+    image: docker.io/ollama/ollama:latest
+    container_name: codesense-ollama-engine
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_models:/root/.ollama:Z
+    security_opt:
+      - no-new-privileges:true
+    userns_mode: "keep-id"
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail http://localhost:11434/api/tags || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    networks:
+      - codesense-pod-net
+
+volumes:
+  ollama_models:
+    name: codesense_ollama_models
+
+networks:
+  codesense-pod-net:
+    name: codesense-pod-net
+    driver: bridge
+

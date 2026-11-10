@@ -71,6 +71,29 @@ st.markdown("""
         border-radius: 4px;
         font-size: 0.85rem;
     }
+    /* Permanently lock the chat bar to the bottom of the viewport */
+    div[data-testid="stChatInput"] {
+        position: fixed !important;
+        bottom: 20px !important;
+        left: calc(50% + 140px) !important;
+        transform: translateX(-50%) !important;
+        width: min(850px, calc(100vw - 360px)) !important;
+        z-index: 99999 !important;
+        background-color: #161b22 !important;
+        border: 1px solid #30363d !important;
+        border-radius: 12px !important;
+        box-shadow: 0 4px 25px rgba(0, 0, 0, 0.8) !important;
+        padding: 4px 8px !important;
+    }
+    @media (max-width: 992px) {
+        div[data-testid="stChatInput"] {
+            left: 50% !important;
+            width: 92% !important;
+        }
+    }
+    .main .block-container {
+        padding-bottom: 110px !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -102,6 +125,12 @@ from scripts.patch_generator import PatchGenerator, generate_unified_patch
 from scripts.dependency_graph import DependencyGraph
 from scripts.codebase_watcher import CodebaseWatcher
 from scripts.audit_logger import AuditLogger
+from datetime import datetime
+
+def log_backend(category: str, message: str):
+    """Logs timestamped event to stdout (visible in podman logs -f) with immediate flushing."""
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(f"[{ts}] [CodeSense AI] [{category}] {message}", flush=True)
 
 @st.cache_resource
 def get_engine():
@@ -345,6 +374,7 @@ with st.sidebar:
         st.session_state.active_repo_label = repo_label
 
     if st.button("🚀 Index / Re-Index Codebase", use_container_width=True, type="primary"):
+        log_backend("INDEX_TRIGGER", f"Manual indexing started for {target_path}")
         with st.spinner("Analyzing codebase and generating ChromaDB vectors..."):
             try:
                 if repo_option == "Clone from GitHub URL":
@@ -510,6 +540,7 @@ with st.sidebar:
         """, unsafe_allow_html=True)
 
         if st.button("⚡ Force Immediate Re-Sync", key="watchdog_force_resync", use_container_width=True, help="Trigger manual re-index across the active watched directory"):
+            log_backend("WATCHDOG_SYNC", f"Manual force re-sync initiated for {daemon.watch_dir}")
             with st.spinner("Synchronizing vector index..."):
                 engine.index_codebase(daemon.watch_dir)
                 st.success("Synchronized!")
@@ -660,7 +691,7 @@ with tab_chat:
 
     st.markdown("---")
 
-    # Chat Container: Guarantees that all messages (history and dynamic queries) render above the input bar
+    # Chat Container: Dynamic height container for messages
     chat_container = st.container()
 
     # Chat Input Bar: Statically anchored at the bottom of the tab interface
@@ -708,6 +739,8 @@ with tab_chat:
                 with st.chat_message("user"):
                     st.markdown(user_query)
 
+                log_backend("QUERY_SUBMITTED", f"Prompt: '{user_query[:60]}' | Provider: {provider} | Model: {model_name}")
+
                 # Generate response
                 with st.chat_message("assistant"):
                     with st.spinner("Analyzing codebase vectors and generating response..."):
@@ -727,6 +760,16 @@ with tab_chat:
 
                             provider_used_tag = res.get("provider_used", provider)
                             model_used_tag = res.get("model_used", model_name)
+                            log_backend("QUERY_COMPLETED", f"Provider: {provider_used_tag} | Model: {model_used_tag} | Citations: {len(res.get('citations', []))}")
+                            try:
+                                AuditLogger.get_instance().log_event(
+                                    event_category="QUERY_EXECUTED",
+                                    target_repo=st.session_state.active_repo_label,
+                                    details=f"Prompt: {user_query[:80]} | Provider: {provider_used_tag} | Model: {model_used_tag}",
+                                    user_action="User"
+                                )
+                            except Exception:
+                                pass
                             st.markdown(f'<div style="display: inline-block; padding: 2px 10px; background: rgba(59, 130, 246, 0.12); border: 1px solid rgba(59, 130, 246, 0.28); border-radius: 12px; font-size: 0.75rem; color: #93c5fd; margin-bottom: 8px;">🤖 <b>Engine:</b> {provider_used_tag} | <b>Model:</b> <code>{model_used_tag}</code></div>', unsafe_allow_html=True)
 
                             render_model_output(res["answer"])
@@ -820,6 +863,7 @@ with tab_remediation:
         st.markdown(f'<div style="padding: 9px 12px; background: rgba(56, 139, 253, 0.08); border: 1px solid rgba(56, 139, 253, 0.25); border-radius: 6px; font-size: 0.85rem; color: #58a6ff;">🤖 <b>Active Engine:</b> {provider} | <b>Model:</b> <code>{model_name}</code></div>', unsafe_allow_html=True)
 
     if generate_clicked:
+        log_backend("REMEDIATION_GENERATE", f"Generating patch for {selected_file_rel} | Issue: '{issue_description[:50]}' | Engine: {provider} ({model_name})")
         if not api_key and provider == "Groq":
             st.warning("⚠️ Please provide your Groq API Key in the left sidebar to run the inference (or switch to 🔒 Local Ollama for keyless execution).")
         else:
@@ -1619,6 +1663,7 @@ with tab_benchmark:
             st.rerun()
 
     if run_bench_clicked:
+        log_backend("BENCHMARK_EXECUTE", "Starting 5-Query RAG Triad benchmark suite")
         if not st.session_state.indexed:
             with st.spinner("Indexing codebase vectors first..."):
                 engine.index_codebase(target_path)
@@ -1707,6 +1752,7 @@ with tab_roi:
 
     with col_p1:
         if st.button("🚀 Tech Startup\n(15 Engineers)", use_container_width=True, key="btn_roi_startup"):
+            log_backend("ROI_PRESET", "Selected profile: Tech Startup (15 Engineers)")
             st.session_state["roi_preset"] = "startup"
             preset_data = CorporateROICalculator.ORGANIZATION_PRESETS["startup"]
             st.session_state["roi_team_size"] = preset_data["team_size"]
@@ -1722,6 +1768,7 @@ with tab_roi:
 
     with col_p2:
         if st.button("🏢 Mid-Market Scaleup\n(75 Engineers)", use_container_width=True, key="btn_roi_midmarket"):
+            log_backend("ROI_PRESET", "Selected profile: Mid-Market Scaleup (75 Engineers)")
             st.session_state["roi_preset"] = "midmarket"
             preset_data = CorporateROICalculator.ORGANIZATION_PRESETS["midmarket"]
             st.session_state["roi_team_size"] = preset_data["team_size"]
@@ -1737,6 +1784,7 @@ with tab_roi:
 
     with col_p3:
         if st.button("🏛️ Global Enterprise MNC\n(250+ Engineers)", use_container_width=True, key="btn_roi_enterprise"):
+            log_backend("ROI_PRESET", "Selected profile: Global Enterprise MNC (250+ Engineers)")
             st.session_state["roi_preset"] = "enterprise"
             preset_data = CorporateROICalculator.ORGANIZATION_PRESETS["enterprise"]
             st.session_state["roi_team_size"] = preset_data["team_size"]

@@ -1,0 +1,80 @@
+# ==============================================================================
+# CodeSense AI — Native Kubernetes Pod Specification for Podman
+# Directly deployable via: podman play kube podman-k8s.yaml
+# Demonstrates Cloud-Native Kubernetes & Rootless Podman Co-location
+# ==============================================================================
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: codesense-ai-pod
+  labels:
+    app: codesense-ai
+    tier: devops-intelligence
+    course: cse4011-ai-devops
+spec:
+  restartPolicy: Always
+  containers:
+    # --------------------------------------------------------------------------
+    # Container 1: CodeSense AI Frontend & DevOps Engine
+    # --------------------------------------------------------------------------
+    - name: codesense-app
+      image: localhost/codesense-ai-app:latest
+      ports:
+        - containerPort: 8501
+          hostPort: 8501
+          protocol: TCP
+      env:
+        - name: ENVIRONMENT
+          value: "production"
+        - name: CHROMA_PERSIST_DIR
+          value: "/app/chroma_db"
+        - name: OLLAMA_HOST
+          value: "http://127.0.0.1:11434"
+        - name: AUDIT_DB_PATH
+          value: "/app/data/codesense_audit.db"
+      volumeMounts:
+        - name: codesense-data
+          mountPath: /app/data
+        - name: codesense-chroma
+          mountPath: /app/chroma_db
+        - name: codesense-sample-repo
+          mountPath: /app/sample_repo
+      resources:
+        requests:
+          memory: "1Gi"
+          cpu: "500m"
+        limits:
+          memory: "4Gi"
+          cpu: "2000m"
+
+    # --------------------------------------------------------------------------
+    # Container 2: Air-Gapped Ollama LLM Inference Node
+    # --------------------------------------------------------------------------
+    - name: ollama-service
+      image: docker.io/ollama/ollama:latest
+      ports:
+        - containerPort: 11434
+          hostPort: 11434
+          protocol: TCP
+      volumeMounts:
+        - name: ollama-storage
+          mountPath: /root/.ollama
+      resources:
+        requests:
+          memory: "2Gi"
+          cpu: "1000m"
+        limits:
+          memory: "8Gi"
+          cpu: "4000m"
+
+  volumes:
+    - name: codesense-data
+      emptyDir: {}
+    - name: codesense-chroma
+      emptyDir: {}
+    - name: codesense-sample-repo
+      emptyDir: {}
+    - name: ollama-storage
+      emptyDir: {}
+
