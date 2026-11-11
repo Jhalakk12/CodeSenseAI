@@ -13,3 +13,4 @@ data/*.sqlite3
 
 sourcegraph/
 docs/
+latex_report/
